@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.provider
 
 import android.content.res.AssetFileDescriptor
@@ -25,7 +29,9 @@ class FcitxDataProvider : DocumentsProvider() {
         private val TEXT_EXTENSIONS = arrayOf(
             "conf",
             "mb",
-            "lua"
+            "lua",
+            "yml",
+            "yaml"
         )
 
         // path relative to baseDir that should be recognize as text files
@@ -84,7 +90,7 @@ class FcitxDataProvider : DocumentsProvider() {
                 add(Root.COLUMN_ROOT_ID, baseDir.docId)
                 add(
                     Root.COLUMN_FLAGS,
-                    Root.FLAG_SUPPORTS_CREATE or Root.FLAG_SUPPORTS_SEARCH or Root.FLAG_SUPPORTS_IS_CHILD
+                    Root.FLAG_SUPPORTS_CREATE or Root.FLAG_LOCAL_ONLY or Root.FLAG_SUPPORTS_SEARCH or Root.FLAG_SUPPORTS_IS_CHILD
                 )
                 add(Root.COLUMN_ICON, R.mipmap.app_icon)
                 add(Root.COLUMN_TITLE, context!!.getString(R.string.app_name))

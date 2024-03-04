@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.common
 
 import android.content.Context
@@ -12,8 +16,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import splitties.dimensions.dp
-import splitties.views.dsl.core.*
+import splitties.views.dsl.core.add
+import splitties.views.dsl.core.horizontalMargin
+import splitties.views.dsl.core.lParams
+import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.styles.AndroidStyles
+import splitties.views.dsl.core.verticalLayout
+import splitties.views.dsl.core.verticalMargin
 
 @Suppress("FunctionName")
 fun <T> Context.DynamicListUi(

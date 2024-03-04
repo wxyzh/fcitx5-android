@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.data.quickphrase
 
 import org.fcitx.fcitx5.android.R
@@ -16,7 +20,7 @@ class CustomQuickPhrase(file: File) : QuickPhrase() {
         get() = if (isEnabled) super.name
         else file.name.substringBefore(".$EXT.$DISABLE")
 
-    override fun loadData(): Result<QuickPhraseData> = QuickPhraseData.fromLines(file.readLines())
+    override fun loadData() = QuickPhraseData.fromLines(file.readLines())
 
     init {
         ensureFileExists()

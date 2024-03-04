@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 #include <fcitx/addonfactory.h>
 #include <fcitx/addonmanager.h>
 #include <fcitx/inputcontextmanager.h>
@@ -10,13 +14,13 @@
 
 namespace fcitx {
 
-class AndroidInputContext : public InputContext {
+class AndroidInputContext : public InputContextV2 {
 public:
     AndroidInputContext(AndroidFrontend *frontend,
                         InputContextManager &inputContextManager,
                         int uid,
                         const std::string &pkgName)
-            : InputContext(inputContextManager, pkgName),
+            : InputContextV2(inputContextManager, pkgName),
               frontend_(frontend),
               uid_(uid) {
         created();
@@ -30,7 +34,11 @@ public:
     [[nodiscard]] const char *frontend() const override { return "androidfrontend"; }
 
     void commitStringImpl(const std::string &text) override {
-        frontend_->commitString(text);
+        frontend_->commitString(text, -1);
+    }
+
+    void commitStringWithCursorImpl(const std::string &text, size_t cursor) override {
+        frontend_->commitString(text, static_cast<int>(cursor));
     }
 
     void forwardKeyImpl(const ForwardKeyEvent &key) override {
@@ -38,23 +46,20 @@ public:
     }
 
     void deleteSurroundingTextImpl(int offset, unsigned int size) override {
-        FCITX_INFO() << "DeleteSurrounding: " << offset << " " << size;
+        const int before = -offset;
+        const int after = offset + static_cast<int>(size);
+        if (before < 0 || after < 0) {
+            FCITX_WARN() << "Invalid deleteSurrounding request: offset=" << offset << ", size=" << size;
+            return;
+        }
+        frontend_->deleteSurrounding(before, after);
     }
 
     void updatePreeditImpl() override {
-        checkClientPreeditUpdate();
+        frontend_->updateClientPreedit(filterText(inputPanel().clientPreedit()));
     }
 
     void updateInputPanel() {
-        // Normally input method engine should check CapabilityFlag::Preedit before update clientPreedit,
-        // and fcitx5 won't trigger UpdatePreeditEvent when that flag is not present, in which case
-        // InputContext::updatePreeditImpl() won't be called.
-        // However on Android, androidkeyboard uses clientPreedit unconditionally in order to provide
-        // a more integrated experience, so we need to check clientPreedit update manually even if
-        // clientPreedit is not enabled.
-        if (!isPreeditEnabled()) {
-            checkClientPreeditUpdate();
-        }
         const InputPanel &ip = inputPanel();
         frontend_->updateInputPanel(
                 filterText(ip.preedit()),
@@ -141,17 +146,6 @@ private:
     AndroidFrontend *frontend_;
     int uid_;
 
-    bool clientPreeditEmpty_ = true;
-
-    void checkClientPreeditUpdate() {
-        const auto &clientPreedit = filterText(inputPanel().clientPreedit());
-        const bool empty = clientPreedit.empty();
-        // skip update if new and old clientPreedit are both empty
-        if (empty && clientPreeditEmpty_) return;
-        clientPreeditEmpty_ = empty;
-        frontend_->updateClientPreedit(clientPreedit);
-    }
-
     inline Text filterText(const Text &orig) {
         return frontend_->instance()->outputFilter(this, orig);
     }
@@ -166,9 +160,7 @@ AndroidFrontend::AndroidFrontend(Instance *instance)
           focusGroup_("android", instance->inputContextManager()),
           activeIC_(nullptr),
           icCache_(),
-          eventHandlers_(),
-          statusAreaDefer_(),
-          statusAreaUpdated_(false) {
+          eventHandlers_() {
     eventHandlers_.emplace_back(instance_->watchEvent(
             EventType::InputContextInputMethodActivated,
             EventWatcherPhase::Default,
@@ -178,18 +170,17 @@ AndroidFrontend::AndroidFrontend(Instance *instance)
             }
     ));
     eventHandlers_.emplace_back(instance_->watchEvent(
-            EventType::InputContextUpdateUI,
+            EventType::InputContextFlushUI,
             EventWatcherPhase::Default,
             [this](Event &event) {
-                auto &e = static_cast<InputContextUpdateUIEvent &>(event);
+                auto &e = static_cast<InputContextFlushUIEvent &>(event);
                 switch (e.component()) {
                     case UserInterfaceComponent::InputPanel: {
-                        auto *ic = dynamic_cast<AndroidInputContext *>(activeIC_);
-                        if (ic) ic->updateInputPanel();
+                        if (activeIC_) activeIC_->updateInputPanel();
                         break;
                     }
                     case UserInterfaceComponent::StatusArea: {
-                        handleStatusAreaUpdate();
+                        statusAreaUpdateCallback();
                         break;
                     }
                 }
@@ -198,10 +189,9 @@ AndroidFrontend::AndroidFrontend(Instance *instance)
 }
 
 void AndroidFrontend::keyEvent(const Key &key, bool isRelease, const int timestamp) {
-    auto *ic = activeIC_;
-    if (!ic) return;
-    KeyEvent keyEvent(ic, key, isRelease);
-    ic->keyEvent(keyEvent);
+    if (!activeIC_) return;
+    KeyEvent keyEvent(activeIC_, key, isRelease);
+    activeIC_->keyEvent(keyEvent);
     if (!keyEvent.accepted()) {
         auto sym = key.sym();
         keyEventCallback(sym, key.states(), Key::keySymToUnicode(sym), isRelease, timestamp);
@@ -213,8 +203,8 @@ void AndroidFrontend::forwardKey(const Key &key, bool isRelease) {
     keyEventCallback(sym, key.states(), Key::keySymToUnicode(sym), isRelease, -1);
 }
 
-void AndroidFrontend::commitString(const std::string &str) {
-    commitStringCallback(str);
+void AndroidFrontend::commitString(const std::string &str, const int cursor) {
+    commitStringCallback(str, cursor);
 }
 
 void AndroidFrontend::updateCandidateList(const std::vector<std::string> &candidates, const int size) {
@@ -226,7 +216,7 @@ void AndroidFrontend::updateClientPreedit(const Text &clientPreedit) {
 }
 
 void AndroidFrontend::updateInputPanel(const Text &preedit, const Text &auxUp, const Text &auxDown) {
-    inputPanelAuxCallback(preedit, auxUp, auxDown);
+    inputPanelCallback(preedit, auxUp, auxDown);
 }
 
 void AndroidFrontend::releaseInputContext(const int uid) {
@@ -234,45 +224,39 @@ void AndroidFrontend::releaseInputContext(const int uid) {
 }
 
 bool AndroidFrontend::selectCandidate(int idx) {
-    auto *ic = dynamic_cast<AndroidInputContext *>(focusGroup_.focusedInputContext());
-    if (!ic) return false;
-    return ic->selectCandidate(idx);
+    if (!activeIC_) return false;
+    return activeIC_->selectCandidate(idx);
 }
 
 bool AndroidFrontend::isInputPanelEmpty() {
-    auto *ic = focusGroup_.focusedInputContext();
-    if (!ic) return true;
-    return ic->inputPanel().empty();
+    if (!activeIC_) return true;
+    return activeIC_->inputPanel().empty();
 }
 
 void AndroidFrontend::resetInputContext() {
-    auto *ic = focusGroup_.focusedInputContext();
-    if (!ic) return;
-    ic->reset();
+    if (!activeIC_) return;
+    activeIC_->reset();
 }
 
 void AndroidFrontend::repositionCursor(int position) {
-    auto *ic = focusGroup_.focusedInputContext();
-    if (!ic) return;
-    InvokeActionEvent event(InvokeActionEvent::Action::LeftClick, position, ic);
-    ic->invokeAction(event);
+    if (!activeIC_) return;
+    InvokeActionEvent event(InvokeActionEvent::Action::LeftClick, position, activeIC_);
+    activeIC_->invokeAction(event);
 }
 
 void AndroidFrontend::focusInputContext(bool focus) {
+    if (!activeIC_) return;
     if (focus) {
-        if (!activeIC_) return;
         activeIC_->focusIn();
     } else {
-        auto *ic = focusGroup_.focusedInputContext();
-        if (!ic) return;
-        ic->focusOut();
+        activeIC_->focusOut();
     }
 }
 
 void AndroidFrontend::activateInputContext(const int uid, const std::string &pkgName) {
     auto *ptr = icCache_.find(uid);
     if (ptr) {
-        activeIC_ = ptr->get();
+        activeIC_ = dynamic_cast<AndroidInputContext *>(ptr->get());
     } else {
         auto *ic = new AndroidInputContext(this, instance_->inputContextManager(), uid, pkgName);
         activeIC_ = ic;
@@ -302,9 +286,12 @@ void AndroidFrontend::setCandidateListCallback(const CandidateListCallback &call
 }
 
 std::vector<std::string> AndroidFrontend::getCandidates(const int offset, const int limit) {
-    auto *ic = dynamic_cast<AndroidInputContext *>(focusGroup_.focusedInputContext());
-    if (!ic) return {};
-    return ic->getCandidates(offset, limit);
+    if (!activeIC_) return {};
+    return activeIC_->getCandidates(offset, limit);
+}
+
+void AndroidFrontend::deleteSurrounding(const int before, const int after) {
+    deleteSurroundingCallback(before, after);
 }
 
 void AndroidFrontend::showToast(const std::string &s) {
@@ -320,7 +307,7 @@ void AndroidFrontend::setPreeditCallback(const ClientPreeditCallback &callback) 
 }
 
 void AndroidFrontend::setInputPanelAuxCallback(const InputPanelCallback &callback) {
-    inputPanelAuxCallback = callback;
+    inputPanelCallback = callback;
 }
 
 void AndroidFrontend::setKeyEventCallback(const KeyEventCallback &callback) {
@@ -335,15 +322,8 @@ void AndroidFrontend::setStatusAreaUpdateCallback(const StatusAreaUpdateCallback
     statusAreaUpdateCallback = callback;
 }
 
-void AndroidFrontend::handleStatusAreaUpdate() {
-    if (statusAreaUpdated_) return;
-    statusAreaUpdated_ = true;
-    statusAreaDefer_ = instance_->eventLoop().addDeferEvent([this](EventSource *) {
-        statusAreaUpdateCallback();
-        statusAreaUpdated_ = false;
-        statusAreaDefer_ = nullptr;
-        return true;
-    });
+void AndroidFrontend::setDeleteSurroundingCallback(const DeleteSurroundingCallback &callback) {
+    deleteSurroundingCallback = callback;
 }
 
 void AndroidFrontend::setToastCallback(const ToastCallback &callback) {

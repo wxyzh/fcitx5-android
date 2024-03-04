@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main
 
 import android.os.Bundle
@@ -64,7 +68,7 @@ class MainFragment : PaddingPreferenceFragment() {
                 addDestinationPreference(
                     R.string.theme,
                     R.drawable.ic_baseline_palette_24,
-                    R.id.action_mainFragment_to_themeListFragment
+                    R.id.action_mainFragment_to_themeFragment
                 )
                 addDestinationPreference(
                     R.string.clipboard,

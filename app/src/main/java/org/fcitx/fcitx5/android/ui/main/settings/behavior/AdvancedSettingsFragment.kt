@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings.behavior
 
 import android.app.NotificationChannel
@@ -28,7 +32,8 @@ import org.fcitx.fcitx5.android.ui.main.MainActivity
 import org.fcitx.fcitx5.android.ui.main.MainViewModel
 import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.addPreference
-import org.fcitx.fcitx5.android.utils.errorDialog
+import org.fcitx.fcitx5.android.utils.formatDateTime
+import org.fcitx.fcitx5.android.utils.importErrorDialog
 import org.fcitx.fcitx5.android.utils.iso8601UTCDateTime
 import org.fcitx.fcitx5.android.utils.notificationManager
 import org.fcitx.fcitx5.android.utils.queryFileName
@@ -55,9 +60,7 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
                     withContext(NonCancellable + Dispatchers.IO) {
                         val name = cr.queryFileName(uri) ?: return@withContext
                         if (!name.endsWith(".zip")) {
-                            importErrorDialog(
-                                getString(R.string.exception_user_data_filename, name)
-                            )
+                            ctx.importErrorDialog(R.string.exception_user_data_filename, name)
                             return@withContext
                         }
                         try {
@@ -89,14 +92,14 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
                                 ctx.toast(
                                     getString(
                                         R.string.user_data_imported,
-                                        iso8601UTCDateTime(metadata.exportTime)
+                                        formatDateTime(metadata.exportTime)
                                     )
                                 )
                             }
                         } catch (e: Exception) {
                             // re-start fcitx in case importing failed
                             FcitxDaemon.startFcitx()
-                            importErrorDialog(e.localizedMessage ?: e.stackTraceToString())
+                            ctx.importErrorDialog(e)
                         }
                     }
                 }
@@ -113,7 +116,7 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
                         } catch (e: Exception) {
                             e.printStackTrace()
                             withContext(Dispatchers.Main) {
-                                ctx.toast(e.localizedMessage ?: e.stackTraceToString())
+                                ctx.toast(e)
                             }
                         }
                     }
@@ -147,10 +150,6 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
-    }
-
-    private suspend fun importErrorDialog(message: String) {
-        errorDialog(requireContext(), getString(R.string.import_error), message)
     }
 
     private val CHANNEL_ID = "app-restart"

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main
 
 import android.app.Activity
@@ -64,11 +68,11 @@ class ClipboardEditActivity : Activity() {
 
     private fun processIntent(intent: Intent) {
         scope.launch {
-            intent.extras?.run {
-                if (getBoolean(LAST_ENTRY)) {
+            intent.run {
+                if (getBooleanExtra(LAST_ENTRY, false)) {
                     ClipboardManager.lastEntry
                 } else {
-                    ClipboardManager.get(getInt(ENTRY_ID))
+                    ClipboardManager.get(getIntExtra(ENTRY_ID, -1))
                 }
             }?.let { setEntry(it) }
         }

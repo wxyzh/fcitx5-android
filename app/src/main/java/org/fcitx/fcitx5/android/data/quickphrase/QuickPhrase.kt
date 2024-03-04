@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.data.quickphrase
 
 import java.io.File
@@ -17,7 +21,7 @@ abstract class QuickPhrase : Serializable {
             throw IllegalStateException("File ${file.absolutePath} does not exist")
     }
 
-    abstract fun loadData(): Result<QuickPhraseData>
+    abstract fun loadData(): QuickPhraseData
 
     abstract fun saveData(data: QuickPhraseData)
 

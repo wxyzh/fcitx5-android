@@ -1,10 +1,18 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input.editorinfo
 
 import android.content.Context
 import android.widget.TableLayout
 import android.widget.TableRow
 import org.fcitx.fcitx5.android.data.theme.Theme
-import splitties.views.dsl.core.*
+import splitties.views.dsl.core.Ui
+import splitties.views.dsl.core.textView
+import splitties.views.dsl.core.view
+import splitties.views.dsl.core.wrapInHorizontalScrollView
+import splitties.views.dsl.core.wrapInScrollView
 import splitties.views.setPaddingDp
 
 class EditorInfoUi(override val ctx: Context, private val theme: Theme) : Ui {

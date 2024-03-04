@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.utils.config
 
 import android.os.Parcelable
@@ -146,6 +150,8 @@ sealed class ConfigDescriptor<T, U> : Parcelable {
             QuickPhrase,
             Chttrans,
             TableGlobal,
+            PinyinCustomPhrase,
+            RimeUserDataDir,
 
             // manually added on Android side for TableManager
             AndroidTable
@@ -267,6 +273,8 @@ sealed class ConfigDescriptor<T, U> : Parcelable {
                                 "QuickPhrase", "Editor" -> ConfigExternal.ETy.QuickPhrase
                                 "Chttrans" -> ConfigExternal.ETy.Chttrans
                                 "TableGlobal" -> ConfigExternal.ETy.TableGlobal
+                                "CustomPhrase" -> ConfigExternal.ETy.PinyinCustomPhrase
+                                "UserDataDir" -> ConfigExternal.ETy.RimeUserDataDir
                                 "AndroidTable" -> ConfigExternal.ETy.AndroidTable
                                 else -> null
                             }

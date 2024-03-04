@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.setup
 
 import android.content.Context
@@ -33,11 +37,10 @@ enum class SetupPage {
     }
 
     companion object {
-        private val values = values()
-        fun valueOf(value: Int) = values[value]
-        fun SetupPage.isLastPage() = this == values.last()
-        fun Int.isLastPage() = this == values.size - 1
-        fun hasUndonePage() = values.any { !it.isDone() }
-        fun firstUndonePage() = values.firstOrNull { !it.isDone() }
+        fun valueOf(value: Int) = entries[value]
+        fun SetupPage.isLastPage() = this == entries.last()
+        fun Int.isLastPage() = this == entries.size - 1
+        fun hasUndonePage() = entries.any { !it.isDone() }
+        fun firstUndonePage() = entries.firstOrNull { !it.isDone() }
     }
 }

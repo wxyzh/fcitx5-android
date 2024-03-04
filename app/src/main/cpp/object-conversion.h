@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 #ifndef FCITX5_ANDROID_OBJECT_CONVERSION_H
 #define FCITX5_ANDROID_OBJECT_CONVERSION_H
 
@@ -31,16 +35,14 @@ jobjectArray fcitxInputMethodEntriesToJObjectArray(JNIEnv *env, const std::vecto
 }
 
 jobject fcitxInputMethodStatusToJObject(JNIEnv *env, const InputMethodStatus &status) {
-    const auto entry = status.entry;
-    if (status.subMode.empty()) return fcitxInputMethodEntryToJObject(env, entry);
     return env->NewObject(GlobalRef->InputMethodEntry, GlobalRef->InputMethodEntryInitWithSubMode,
-                          *JString(env, entry->uniqueName()),
-                          *JString(env, entry->name()),
-                          *JString(env, entry->icon()),
-                          *JString(env, entry->nativeName()),
-                          *JString(env, entry->label()),
-                          *JString(env, entry->languageCode()),
-                          entry->isConfigurable(),
+                          *JString(env, status.uniqueName),
+                          *JString(env, status.name),
+                          *JString(env, status.icon),
+                          *JString(env, status.nativeName),
+                          *JString(env, status.label),
+                          *JString(env, status.languageCode),
+                          status.configurable,
                           *JString(env, status.subMode),
                           *JString(env, status.subModeLabel),
                           *JString(env, status.subModeIcon)

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.utils
 
 import android.system.Os
@@ -7,6 +11,8 @@ import java.io.IOException
 
 object FileUtil {
 
+    private fun File.isSymlink(): Boolean = OsConstants.S_ISLNK(Os.lstat(path).st_mode)
+
     /**
      * Delete a [File].
      * If it's a directory, delete its contents first.
@@ -15,12 +21,25 @@ object FileUtil {
     fun removeFile(file: File) = runCatching {
         if (!file.exists())
             return Result.success(Unit)
-        val isSymlink = OsConstants.S_ISLNK(Os.lstat(file.path).st_mode)
-        // deleteRecursively follows symlink, so we want to make sure it's not a symlink
-        val result = if (!isSymlink)
-            file.deleteRecursively()
-        else
+        val result = if (file.isSymlink()) {
             file.delete()
+        } else if (file.isDirectory) {
+            file.walkBottomUp()
+                .onEnter {
+                    // delete symlink (to directory) instead of entering it
+                    if (it.isSymlink()) {
+                        it.delete()
+                        false
+                    } else {
+                        true
+                    }
+                }
+                .fold(true) { acc, it ->
+                    if (!it.exists()) acc else it.delete()
+                }
+        } else {
+            file.delete()
+        }
         if (!result)
             throw IOException("Cannot delete '${file.path}'")
     }

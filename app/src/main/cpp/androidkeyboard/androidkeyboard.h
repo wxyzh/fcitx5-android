@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 #ifndef _FCITX5_ANDROID_ANDROIDKEYBOARD_H_
 #define _FCITX5_ANDROID_ANDROIDKEYBOARD_H_
 
@@ -50,6 +54,9 @@ struct AndroidKeyboardEngineState : public InputContextProperty {
 
 class AndroidKeyboardEngine final : public InputMethodEngineV3 {
 public:
+    static int constexpr MaxBufferSize = 20;
+    static int constexpr SpellCandidateSize = 20;
+
     AndroidKeyboardEngine(Instance *instance);
     ~AndroidKeyboardEngine() = default;
 
@@ -100,7 +107,10 @@ public:
 
 private:
     bool supportHint(const std::string &language);
-    std::string preeditString(InputContext *inputContext);
+    /**
+     * preedit string and byte cursor
+     */
+    std::pair<std::string, size_t> preeditWithCursor(InputContext *inputContext);
 
     Instance *instance_;
     AndroidKeyboardEngineConfig config_;

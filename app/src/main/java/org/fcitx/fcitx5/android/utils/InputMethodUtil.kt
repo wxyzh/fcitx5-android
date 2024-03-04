@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.utils
 
 import android.content.ComponentName
@@ -6,24 +10,33 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.view.inputmethod.InputMethodSubtype
+import org.fcitx.fcitx5.android.BuildConfig
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
-import timber.log.Timber
-import java.util.TimeZone
 
 object InputMethodUtil {
-    private val serviceName =
+
+    @JvmField
+    val serviceName: String = FcitxInputMethodService::class.java.name
+
+    @JvmField
+    val componentName: String =
         ComponentName(appContext, FcitxInputMethodService::class.java).flattenToShortString()
 
-    private fun getSecureSettings(name: String) =
-        Settings.Secure.getString(appContext.contentResolver, name)
+    fun isEnabled(): Boolean {
+        return appContext.inputMethodManager.enabledInputMethodList.any {
+            it.packageName == BuildConfig.APPLICATION_ID && it.serviceName == serviceName
+        }
+    }
 
-    fun isEnabled(): Boolean =
-        getSecureSettings(Settings.Secure.ENABLED_INPUT_METHODS)
-            ?.split(":")?.contains(serviceName)
-            ?: false
-
-    fun isSelected(): Boolean =
-        getSecureSettings(Settings.Secure.DEFAULT_INPUT_METHOD) == serviceName
+    fun isSelected(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            appContext.inputMethodManager.currentInputMethodInfo?.let {
+                it.packageName == BuildConfig.APPLICATION_ID && it.serviceName == serviceName
+            } ?: false
+        } else {
+            getSecureSettings(Settings.Secure.DEFAULT_INPUT_METHOD) == componentName
+        }
+    }
 
     fun startSettingsActivity(context: Context) =
         context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {

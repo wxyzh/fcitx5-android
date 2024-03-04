@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings.theme
 
 import android.content.Context
@@ -111,8 +115,8 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
         checkMark.imageResource = when (state) {
             State.Normal -> 0
             State.Selected -> R.drawable.ic_baseline_check_24
-            State.LightMode -> R.drawable.ic_baseline_light_mode_24
-            State.DarkMode -> R.drawable.ic_baseline_dark_mode_24
+            State.LightMode -> R.drawable.ic_sharp_light_mode_24
+            State.DarkMode -> R.drawable.ic_sharp_mode_night_24
         }
     }
 }

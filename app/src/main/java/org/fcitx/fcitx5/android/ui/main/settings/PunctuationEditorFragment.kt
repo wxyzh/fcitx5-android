@@ -1,7 +1,12 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings
 
 import android.app.AlertDialog
 import android.view.View
+import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.RawConfig
 import org.fcitx.fcitx5.android.core.getPunctuationConfig
 import org.fcitx.fcitx5.android.daemon.launchOnReady
@@ -11,6 +16,7 @@ import org.fcitx.fcitx5.android.ui.common.BaseDynamicListUi
 import org.fcitx.fcitx5.android.ui.common.OnItemChangedListener
 import org.fcitx.fcitx5.android.utils.NaiveDustman
 import org.fcitx.fcitx5.android.utils.materialTextInput
+import org.fcitx.fcitx5.android.utils.onPositiveButtonClick
 import org.fcitx.fcitx5.android.utils.str
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.lParams
@@ -102,13 +108,29 @@ class PunctuationEditorFragment : ProgressFragment(), OnItemChangedListener<Punc
                 AlertDialog.Builder(context)
                     .setTitle(title)
                     .setView(layout)
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
-                        block(
-                            PunctuationMapEntry(keyField.str, mappingField.str, altMappingField.str)
-                        )
-                    }
+                    .setPositiveButton(android.R.string.ok, null)
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
+                    .onPositiveButtonClick onClick@{
+                        val key = keyField.str.trim()
+                        if (key.isBlank()) {
+                            keyField.error = getString(R.string._cannot_be_empty, keyDesc)
+                            keyField.requestFocus()
+                            return@onClick false
+                        } else {
+                            keyField.error = null
+                        }
+                        val mapping = mappingField.str
+                        if (mapping.isBlank()) {
+                            mappingField.error = getString(R.string._cannot_be_empty, mappingDesc)
+                            mappingField.requestFocus()
+                            return@onClick false
+                        } else {
+                            mappingField.error = null
+                        }
+                        block(PunctuationMapEntry(key, mapping, altMappingField.str))
+                        return@onClick true
+                    }
             }
         }
         resetDustman()

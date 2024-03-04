@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input.keyboard
 
 import android.annotation.SuppressLint
@@ -26,16 +30,16 @@ class TextKeyboard(
 
         val Layout: List<List<KeyDef>> = listOf(
             listOf(
-                AlphabetDigitKey("Q", 1),
-                AlphabetDigitKey("W", 2),
-                AlphabetDigitKey("E", 3),
-                AlphabetDigitKey("R", 4),
-                AlphabetDigitKey("T", 5),
-                AlphabetDigitKey("Y", 6),
-                AlphabetDigitKey("U", 7),
-                AlphabetDigitKey("I", 8),
-                AlphabetDigitKey("O", 9),
-                AlphabetDigitKey("P", 0)
+                AlphabetKey("Q", "1"),
+                AlphabetKey("W", "2"),
+                AlphabetKey("E", "3"),
+                AlphabetKey("R", "4"),
+                AlphabetKey("T", "5"),
+                AlphabetKey("Y", "6"),
+                AlphabetKey("U", "7"),
+                AlphabetKey("I", "8"),
+                AlphabetKey("O", "9"),
+                AlphabetKey("P", "0")
             ),
             listOf(
                 AlphabetKey("A", "@"),

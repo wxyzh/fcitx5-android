@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input.keyboard
 
 import androidx.core.content.ContextCompat
@@ -7,6 +11,8 @@ import org.fcitx.fcitx5.android.core.FcitxAPI
 import org.fcitx.fcitx5.android.core.KeyState
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
+import org.fcitx.fcitx5.android.input.broadcast.PreeditEmptyStateComponent
+import org.fcitx.fcitx5.android.input.candidates.HorizontalCandidateComponent
 import org.fcitx.fcitx5.android.input.dependency.context
 import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
@@ -46,20 +52,28 @@ class CommonKeyActionListener :
     private val fcitx by manager.fcitx()
     private val service by manager.inputMethodService()
     private val inputView by manager.inputView()
+    private val preeditState: PreeditEmptyStateComponent by manager.must()
+    private val horizontalCandidate: HorizontalCandidateComponent by manager.must()
     private val windowManager: InputWindowManager by manager.must()
 
     private var lastPickerType by AppPrefs.getInstance().internal.lastPickerType
-    private val spaceKeyLongPressBehavior by AppPrefs.getInstance().keyboard.spaceKeyLongPressBehavior
+
+    private val kbdPrefs = AppPrefs.getInstance().keyboard
+
+    private val spaceKeyLongPressBehavior by kbdPrefs.spaceKeyLongPressBehavior
+    private val langSwitchKeyBehavior by kbdPrefs.langSwitchKeyBehavior
 
     private var backspaceSwipeState = Stopped
+
+    private val keepComposingIMs = arrayOf("keyboard-us", "unikey")
 
     private suspend fun FcitxAPI.commitAndReset() {
         if (clientPreeditCached.isEmpty() && inputPanelCached.preedit.isEmpty()) {
             // preedit is empty, there can be prediction candidates
             reset()
-        } else if (inputMethodEntryCached.uniqueName.let { it == "keyboard-us" || it == "unikey" }) {
+        } else if (inputMethodEntryCached.uniqueName in keepComposingIMs) {
             // androidkeyboard clears composing on reset, but we want to commit it as-is
-            service.currentInputConnection?.finishComposingText()
+            service.finishComposing()
             reset()
         } else {
             if (!select(0)) reset()
@@ -77,41 +91,55 @@ class CommonKeyActionListener :
     val listener by lazy {
         KeyActionListener { action, _ ->
             when (action) {
-                is FcitxKeyAction -> fcitx.launchOnReady {
-                    it.sendKey(action.act, KeyState.Virtual.state)
+                is FcitxKeyAction -> service.postFcitxJob {
+                    sendKey(action.act, KeyState.Virtual.state)
                 }
-                is SymAction -> fcitx.launchOnReady {
-                    it.sendKey(action.sym, action.states)
+                is SymAction -> service.postFcitxJob {
+                    sendKey(action.sym, action.states)
                 }
-                is CommitAction -> fcitx.launchOnReady {
-                    it.commitAndReset()
+                is CommitAction -> service.postFcitxJob {
+                    commitAndReset()
                     service.lifecycleScope.launch { service.commitText(action.text) }
                 }
-                is QuickPhraseAction -> fcitx.launchOnReady {
-                    it.commitAndReset()
-                    it.triggerQuickPhrase()
+                is QuickPhraseAction -> service.postFcitxJob {
+                    commitAndReset()
+                    triggerQuickPhrase()
                 }
-                is UnicodeAction -> fcitx.launchOnReady {
-                    it.commitAndReset()
-                    it.triggerUnicode()
+                is UnicodeAction -> service.postFcitxJob {
+                    commitAndReset()
+                    triggerUnicode()
                 }
-                is LangSwitchAction -> fcitx.launchOnReady {
-                    if (it.enabledIme().size < 2) {
-                        service.lifecycleScope.launch {
-                            inputView.showDialog(AddMoreInputMethodsPrompt.build(context))
+                is LangSwitchAction -> {
+                    when (langSwitchKeyBehavior) {
+                        LangSwitchBehavior.Enumerate -> {
+                            service.postFcitxJob {
+                                if (enabledIme().size < 2) {
+                                    service.lifecycleScope.launch {
+                                        inputView.showDialog(AddMoreInputMethodsPrompt.build(context))
+                                    }
+                                } else {
+                                    enumerateIme()
+                                }
+                            }
                         }
-                    } else {
-                        it.enumerateIme()
+                        LangSwitchBehavior.ToggleActivate -> {
+                            service.postFcitxJob {
+                                toggleIme()
+                            }
+                        }
+                        LangSwitchBehavior.NextInputMethodApp -> {
+                            service.nextInputMethodApp()
+                        }
                     }
                 }
                 is ShowInputMethodPickerAction -> showInputMethodPicker()
                 is MoveSelectionAction -> {
                     when (backspaceSwipeState) {
                         Stopped -> {
-                            val preeditEmpty = fcitx.runImmediately {
-                                clientPreeditCached.isEmpty() && inputPanelCached.preedit.isEmpty()
-                            }
-                            backspaceSwipeState = if (preeditEmpty) {
+                            backspaceSwipeState = if (
+                                preeditState.isEmpty &&
+                                horizontalCandidate.adapter.total == 0
+                            ) {
                                 service.applySelectionOffset(action.start, action.end)
                                 Selection
                             } else {
@@ -129,7 +157,7 @@ class CommonKeyActionListener :
                         Stopped -> {}
                         Selection -> service.deleteSelection()
                         Reset -> if (action.totalCnt < 0) { // swipe left
-                            fcitx.launchOnReady { it.reset() }
+                            service.postFcitxJob { reset() }
                         }
                     }
                     backspaceSwipeState = Stopped
@@ -146,11 +174,11 @@ class CommonKeyActionListener :
                 is SpaceLongPressAction -> {
                     when (spaceKeyLongPressBehavior) {
                         SpaceLongPressBehavior.None -> {}
-                        SpaceLongPressBehavior.Enumerate -> fcitx.launchOnReady {
-                            it.enumerateIme()
+                        SpaceLongPressBehavior.Enumerate -> service.postFcitxJob {
+                            enumerateIme()
                         }
-                        SpaceLongPressBehavior.ToggleActivate -> fcitx.launchOnReady {
-                            it.toggleIme()
+                        SpaceLongPressBehavior.ToggleActivate -> service.postFcitxJob {
+                            toggleIme()
                         }
                         SpaceLongPressBehavior.ShowPicker -> showInputMethodPicker()
                     }

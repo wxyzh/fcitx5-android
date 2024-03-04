@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.setup
 
 import android.app.NotificationChannel
@@ -8,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.app.NotificationCompat
 import androidx.core.os.bundleOf
@@ -21,8 +26,6 @@ import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.databinding.ActivitySetupBinding
 import org.fcitx.fcitx5.android.ui.setup.SetupPage.Companion.firstUndonePage
 import org.fcitx.fcitx5.android.ui.setup.SetupPage.Companion.isLastPage
-import org.fcitx.fcitx5.android.utils.applyTranslucentSystemBars
-import org.fcitx.fcitx5.android.utils.getCurrentFragment
 import org.fcitx.fcitx5.android.utils.notificationManager
 
 class SetupActivity : FragmentActivity() {
@@ -37,7 +40,7 @@ class SetupActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        applyTranslucentSystemBars()
+        enableEdgeToEdge()
         val binding = ActivitySetupBinding.inflate(layoutInflater)
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
             val sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -55,7 +58,7 @@ class SetupActivity : FragmentActivity() {
         }
         nextButton = binding.nextButton.apply {
             setOnClickListener {
-                if (viewPager.currentItem != SetupPage.values().size - 1)
+                if (viewPager.currentItem != SetupPage.entries.size - 1)
                     viewPager.currentItem = viewPager.currentItem + 1
                 else finish()
             }
@@ -93,7 +96,9 @@ class SetupActivity : FragmentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        (viewPager.getCurrentFragment(supportFragmentManager) as SetupFragment).sync()
+        supportFragmentManager.fragments.forEach {
+            if (it.isVisible) (it as SetupFragment).sync()
+        }
     }
 
     private fun createNotificationChannel() {
@@ -134,7 +139,7 @@ class SetupActivity : FragmentActivity() {
     }
 
     private inner class Adapter : FragmentStateAdapter(this) {
-        override fun getItemCount(): Int = SetupPage.values().size
+        override fun getItemCount(): Int = SetupPage.entries.size
 
         override fun createFragment(position: Int): Fragment =
             SetupFragment().apply {

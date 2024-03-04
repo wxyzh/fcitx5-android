@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.core
 
 import android.os.Parcelable
@@ -81,6 +85,20 @@ data class RawConfig(
 
     fun findByName(name: String): RawConfig? {
         return subItems?.find { it.name == name }
+    }
+
+    fun getOrCreate(name: String): RawConfig {
+        val items = subItems
+        return if (items == null) {
+            RawConfig(name, "", "", null).also {
+                subItems = arrayOf(it)
+            }
+        } else {
+            items.find { it.name == name }
+                ?: RawConfig(name, "", "", null).also {
+                    subItems = items + it
+                }
+        }
     }
 
     /**

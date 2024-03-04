@@ -1,7 +1,12 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings
 
 import android.app.AlertDialog
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import androidx.core.os.bundleOf
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +21,7 @@ import org.fcitx.fcitx5.android.ui.common.BaseDynamicListUi
 import org.fcitx.fcitx5.android.ui.common.OnItemChangedListener
 import org.fcitx.fcitx5.android.utils.NaiveDustman
 import org.fcitx.fcitx5.android.utils.materialTextInput
+import org.fcitx.fcitx5.android.utils.onPositiveButtonClick
 import org.fcitx.fcitx5.android.utils.serializable
 import org.fcitx.fcitx5.android.utils.str
 import splitties.views.dsl.core.add
@@ -35,13 +41,17 @@ class QuickPhraseEditFragment : ProgressFragment(), OnItemChangedListener<QuickP
     override suspend fun initialize(): View {
         quickPhrase = requireArguments().serializable(ARG)!!
         val initialEntries = withContext(Dispatchers.IO) {
-            quickPhrase.loadData().getOrThrow()
+            quickPhrase.loadData()
         }
         ui = object : BaseDynamicListUi<QuickPhraseEntry>(
             requireContext(),
             Mode.FreeAdd("", converter = { QuickPhraseEntry("", "") }),
             initialEntries,
         ) {
+            override fun showEntry(x: QuickPhraseEntry): String = x.run {
+                "$keyword → ${phrase.replace("\n", "\\n")}"
+            }
+
             override fun showEditDialog(
                 title: String,
                 entry: QuickPhraseEntry?,
@@ -49,6 +59,10 @@ class QuickPhraseEditFragment : ProgressFragment(), OnItemChangedListener<QuickP
             ) {
                 val (keywordLayout, keywordField) = materialTextInput {
                     setHint(R.string.quickphrase_keyword)
+                }
+                keywordField.apply {
+                    isSingleLine = true
+                    imeOptions = EditorInfo.IME_ACTION_NEXT
                 }
                 val (phraseLayout, phraseField) = materialTextInput {
                     setHint(R.string.quickphrase_phrase)
@@ -65,15 +79,37 @@ class QuickPhraseEditFragment : ProgressFragment(), OnItemChangedListener<QuickP
                 AlertDialog.Builder(context)
                     .setTitle(title)
                     .setView(layout)
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
-                        block(QuickPhraseEntry(keywordField.str, phraseField.str))
-                    }
+                    .setPositiveButton(android.R.string.ok, null)
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
-            }
-
-            override fun showEntry(x: QuickPhraseEntry): String = x.run {
-                "$keyword\u2003→\u2003$phrase"
+                    .onPositiveButtonClick onClick@{
+                        val keyword = keywordField.str.trim()
+                        // "keyword" cannot contain any black characters
+                        if (keyword.isBlank()) {
+                            keywordField.error = getString(
+                                R.string._cannot_be_empty,
+                                getString(R.string.quickphrase_keyword)
+                            )
+                            keywordField.requestFocus()
+                            return@onClick false
+                        } else {
+                            keywordField.error = null
+                        }
+                        // "phrase" may contain blank characters
+                        val phrase = phraseField.str
+                        if (phrase.isEmpty()) {
+                            phraseField.error = getString(
+                                R.string._cannot_be_empty,
+                                getString(R.string.quickphrase_phrase)
+                            )
+                            phraseField.requestFocus()
+                            return@onClick false
+                        } else {
+                            phraseField.error = null
+                        }
+                        block(QuickPhraseEntry(keyword, phraseField.str))
+                        return@onClick true
+                    }
             }
         }
         ui.addOnItemChangedListener(this)

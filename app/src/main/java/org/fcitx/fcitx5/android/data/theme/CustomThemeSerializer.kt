@@ -1,10 +1,18 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.data.theme
 
 import arrow.core.compose
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.fcitx.fcitx5.android.utils.NostalgicSerializer
-import org.fcitx.fcitx5.android.utils.identity
-import org.fcitx.fcitx5.android.utils.upcast
 
 object CustomThemeSerializer : JsonTransformingSerializer<Theme.Custom>(Theme.Custom.serializer()) {
 
@@ -31,17 +39,18 @@ object CustomThemeSerializer : JsonTransformingSerializer<Theme.Custom>(Theme.Cu
     private fun JsonObject.removeVersion() =
         JsonObject(this - VERSION)
 
+    private val EmptyTransform: (JsonObject) -> JsonObject = { it }
 
     private fun applyStrategy(oldVersion: String, obj: JsonObject) =
         strategies
             .takeWhile { it.version != oldVersion }
-            .foldRight(JsonObject::identity.upcast()) { f, acc -> f compose acc }
+            .foldRight(EmptyTransform) { it, acc -> it.transformation compose acc }
             .invoke(obj)
 
     data class MigrationStrategy(
         val version: String,
         val transformation: (JsonObject) -> JsonObject
-    ) : (JsonObject) -> JsonObject by transformation
+    )
 
     private val strategies: List<MigrationStrategy> =
         // Add migrations here
@@ -66,7 +75,7 @@ object CustomThemeSerializer : JsonTransformingSerializer<Theme.Custom>(Theme.Cu
                     }
                 })
             },
-            MigrationStrategy("1.0", JsonObject::identity),
+            MigrationStrategy("1.0", EmptyTransform)
         )
 
     private const val VERSION = "version"

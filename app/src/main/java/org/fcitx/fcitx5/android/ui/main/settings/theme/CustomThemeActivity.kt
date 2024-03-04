@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings.theme
 
 import android.annotation.SuppressLint
@@ -19,10 +23,12 @@ import android.view.ViewGroup
 import android.webkit.MimeTypeMap
 import android.widget.SeekBar
 import androidx.activity.addCallback
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -37,11 +43,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
-import org.fcitx.fcitx5.android.data.theme.ThemeManager
+import org.fcitx.fcitx5.android.data.theme.ThemeFilesManager
 import org.fcitx.fcitx5.android.data.theme.ThemePreset
 import org.fcitx.fcitx5.android.ui.common.withLoadingDialog
-import org.fcitx.fcitx5.android.utils.applyTranslucentSystemBars
-import org.fcitx.fcitx5.android.utils.darkenColorFilter
+import org.fcitx.fcitx5.android.utils.DarkenColorFilter
 import org.fcitx.fcitx5.android.utils.parcelable
 import splitties.dimensions.dp
 import splitties.resources.color
@@ -49,11 +54,33 @@ import splitties.resources.drawable
 import splitties.resources.resolveThemeAttribute
 import splitties.resources.styledColor
 import splitties.resources.styledDrawable
-import splitties.views.*
+import splitties.views.backgroundColor
+import splitties.views.bottomPadding
 import splitties.views.dsl.appcompat.switch
-import splitties.views.dsl.appcompat.toolbar
-import splitties.views.dsl.constraintlayout.*
-import splitties.views.dsl.core.*
+import splitties.views.dsl.constraintlayout.above
+import splitties.views.dsl.constraintlayout.before
+import splitties.views.dsl.constraintlayout.below
+import splitties.views.dsl.constraintlayout.bottomOfParent
+import splitties.views.dsl.constraintlayout.centerHorizontally
+import splitties.views.dsl.constraintlayout.constraintLayout
+import splitties.views.dsl.constraintlayout.endOfParent
+import splitties.views.dsl.constraintlayout.lParams
+import splitties.views.dsl.constraintlayout.matchConstraints
+import splitties.views.dsl.constraintlayout.packed
+import splitties.views.dsl.constraintlayout.startOfParent
+import splitties.views.dsl.constraintlayout.topOfParent
+import splitties.views.dsl.constraintlayout.topToTopOf
+import splitties.views.dsl.core.add
+import splitties.views.dsl.core.matchParent
+import splitties.views.dsl.core.seekBar
+import splitties.views.dsl.core.textView
+import splitties.views.dsl.core.view
+import splitties.views.dsl.core.wrapContent
+import splitties.views.dsl.core.wrapInScrollView
+import splitties.views.gravityVerticalCenter
+import splitties.views.horizontalPadding
+import splitties.views.textAppearance
+import splitties.views.topPadding
 import java.io.File
 
 class CustomThemeActivity : AppCompatActivity() {
@@ -76,11 +103,11 @@ class CustomThemeActivity : AppCompatActivity() {
             }
 
         override fun parseResult(resultCode: Int, intent: Intent?): BackgroundResult? =
-            intent?.extras?.parcelable(RESULT)
+            intent?.parcelable(RESULT)
     }
 
     private val toolbar by lazy {
-        toolbar {
+        view(::Toolbar) {
             backgroundColor = styledColor(android.R.attr.colorPrimary)
             elevation = dp(4f)
         }
@@ -236,7 +263,7 @@ class CustomThemeActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // recover from bundle
-        val originTheme = intent?.extras?.parcelable<Theme.Custom>(ORIGIN_THEME)?.also { t ->
+        val originTheme = intent?.parcelable<Theme.Custom>(ORIGIN_THEME)?.also { t ->
             theme = t
             whenHasBackground {
                 croppedImageFile = File(it.croppedFilePath)
@@ -249,7 +276,7 @@ class CustomThemeActivity : AppCompatActivity() {
         }
         // create new
         if (originTheme == null) {
-            val (n, c, s) = ThemeManager.newCustomBackgroundImages()
+            val (n, c, s) = ThemeFilesManager.newCustomBackgroundImages()
             backgroundStates.apply {
                 croppedImageFile = c
                 srcImageFile = s
@@ -265,7 +292,7 @@ class CustomThemeActivity : AppCompatActivity() {
             variantSwitch.visibility = View.GONE
             brightnessSeekBar.visibility = View.GONE
         }
-        applyTranslucentSystemBars()
+        enableEdgeToEdge()
         ViewCompat.setOnApplyWindowInsetsListener(ui) { _, windowInsets ->
             val statusBars = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars())
             val navBars = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars())
@@ -387,7 +414,7 @@ class CustomThemeActivity : AppCompatActivity() {
     private fun BackgroundStates.updateState() {
         val progress = brightnessSeekBar.progress
         brightnessValue.text = "$progress%"
-        filteredDrawable.colorFilter = darkenColorFilter(100 - progress)
+        filteredDrawable.colorFilter = DarkenColorFilter(100 - progress)
         previewUi.setBackground(filteredDrawable)
     }
 

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.utils
 
 import android.content.Context
@@ -33,7 +37,7 @@ object DeviceInfo {
         appendLine("Package Name: ${BuildConfig.APPLICATION_ID}")
         appendLine("Version Code: ${BuildConfig.VERSION_CODE}")
         appendLine("Version Name: ${Const.versionName}")
-        appendLine("Build Time: ${iso8601UTCDateTime(Const.buildTime)}")
-        appendLine("Build Git Hash: ${Const.buildGitHash}")
+        appendLine("Build Time: ${iso8601UTCDateTime(BuildConfig.BUILD_TIME)}")
+        appendLine("Build Git Hash: ${BuildConfig.BUILD_GIT_HASH}")
     }
 }

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input.clipboard
 
 import android.os.Build
@@ -11,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.clipboard.db.ClipboardEntry
 import org.fcitx.fcitx5.android.data.theme.Theme
+import org.fcitx.fcitx5.android.utils.DeviceUtil
 import splitties.resources.drawable
 import splitties.resources.styledColor
 import kotlin.math.min
@@ -75,7 +80,6 @@ abstract class ClipboardAdapter :
                 onPaste(entry)
             }
             root.setOnLongClickListener {
-                popupMenu?.dismiss()
                 val iconColor = ctx.styledColor(android.R.attr.colorControlNormal)
                 val popup = PopupMenu(ctx, root)
                 fun menuItem(@StringRes title: Int, @DrawableRes ic: Int, callback: () -> Unit) {
@@ -98,13 +102,14 @@ abstract class ClipboardAdapter :
                 menuItem(R.string.delete, R.drawable.ic_baseline_delete_24) {
                     onDelete(entry.id)
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !DeviceUtil.isSamsungOneUI) {
                     popup.setForceShowIcon(true)
                 }
-                popupMenu = popup
                 popup.setOnDismissListener {
                     if (it === popupMenu) popupMenu = null
                 }
+                popupMenu?.dismiss()
+                popupMenu = popup
                 popup.show()
                 true
             }
@@ -115,6 +120,7 @@ abstract class ClipboardAdapter :
 
     fun onDetached() {
         popupMenu?.dismiss()
+        popupMenu = null
     }
 
     abstract val theme: Theme

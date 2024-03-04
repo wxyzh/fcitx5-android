@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/fdroid.yml'
+      - 'app/org.fcitx.fcitx5.android.yml'
   workflow_dispatch:
     inputs:
       build_number:
@@ -31,12 +32,12 @@ jobs:
       fail-fast: false
     steps:
       - name: Fetch fdroiddata
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: f-droid/fdroiddata
 
       - name: Fetch fdroidserver
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: f-droid/fdroidserver
           path: fdroidserver
@@ -65,6 +66,8 @@ jobs:
           BUILD_NUMBER: ${{ inputs.build_number || 'lastSuccessfulBuild' }}
         run: |
           set -x
+          # prevent prebuilder from writing to build summary file
+          unset GITHUB_ACTIONS GITHUB_STEP_SUMMARY
           curl -Lo /usr/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
           chmod +x /usr/bin/yq
           build_metadata=$(curl "https://jenkins.fcitx-im.org/job/android/job/fcitx5-android/$BUILD_NUMBER/artifact/out/build-metadata.json")
@@ -114,7 +117,7 @@ jobs:
           $fdroid build --verbose --test --scan-binary --on-server --no-tarball $build
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ success() || failure() }}
         with:
           name: fdroid-${{ matrix.abi }}

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input.candidates
 
 import android.content.res.Configuration
@@ -74,6 +78,10 @@ class HorizontalCandidateComponent :
         runBlocking {
             _expandedCandidateOffset.emit(view.childCount)
         }
+        bar.expandButtonStateMachine.push(
+            ExpandedCandidatesUpdated,
+            ExpandedCandidatesEmpty to (adapter.total == layoutManager.childCount)
+        )
     }
 
     val adapter: HorizontalCandidateViewAdapter by lazy {
@@ -114,10 +122,6 @@ class HorizontalCandidateComponent :
                     }
                 }
                 refreshExpanded()
-                bar.expandButtonStateMachine.push(
-                    ExpandedCandidatesUpdated,
-                    ExpandedCandidatesEmpty to (adapter.total == childCount)
-                )
             }
             // no need to override `generate{,Default}LayoutParams`, because HorizontalCandidateViewAdapter
             // guarantees ViewHolder's layoutParams to be `FlexboxLayoutManager.LayoutParams`
@@ -174,5 +178,9 @@ class HorizontalCandidateComponent :
             }
         }
         adapter.updateCandidates(candidates, total)
+        // not sure why empty candidates won't trigger `FlexboxLayoutManager#onLayoutCompleted()`
+        if (candidates.isEmpty()) {
+            refreshExpanded()
+        }
     }
 }

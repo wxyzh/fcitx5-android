@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
@@ -97,9 +101,9 @@ class AutoScaleTextView @JvmOverloads constructor(
             } else {
                 textBounds.set(
                     /* left = */ 0,
-                    /* top = */ floor(fontMetrics.top.toDouble()).toInt(),
-                    /* right = */ ceil(paint.measureText(text).toDouble()).toInt(),
-                    /* bottom = */ ceil(fontMetrics.bottom.toDouble()).toInt()
+                    /* top = */ floor(fontMetrics.top).toInt(),
+                    /* right = */ ceil(paint.measureText(text)).toInt(),
+                    /* bottom = */ ceil(fontMetrics.bottom).toInt()
                 )
             }
             needsMeasureText = false

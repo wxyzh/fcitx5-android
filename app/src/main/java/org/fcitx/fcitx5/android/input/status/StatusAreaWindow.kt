@@ -1,15 +1,22 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input.status
 
+import android.os.Build
 import android.view.View
 import android.widget.PopupMenu
 import android.widget.Toast
-import androidx.core.view.MenuCompat
+import androidx.core.text.buildSpannedString
+import androidx.core.text.color
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.Action
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.launchOnReady
+import org.fcitx.fcitx5.android.core.SubtypeManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
@@ -26,8 +33,11 @@ import org.fcitx.fcitx5.android.input.status.StatusAreaEntry.Android.Type.ThemeL
 import org.fcitx.fcitx5.android.input.wm.InputWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
 import org.fcitx.fcitx5.android.utils.AppUtil
+import org.fcitx.fcitx5.android.utils.DeviceUtil
+import org.fcitx.fcitx5.android.utils.alpha
 import org.mechdancer.dependency.manager.must
 import splitties.dimensions.dp
+import splitties.resources.styledColor
 import splitties.views.backgroundColor
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.horizontalLayout
@@ -76,23 +86,44 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
         }
     }
 
+    var popupMenu: PopupMenu? = null
+
     private val adapter: StatusAreaAdapter by lazy {
         object : StatusAreaAdapter() {
             override fun onItemClick(view: View, entry: StatusAreaEntry) {
                 when (entry) {
                     is StatusAreaEntry.Fcitx -> {
-                        val menu = entry.action.menu
-                        if (menu.isNullOrEmpty()) {
+                        val actions = entry.action.menu
+                        if (actions.isNullOrEmpty()) {
                             activateAction(entry.action)
                             return
                         }
                         val popup = PopupMenu(context, view)
-                        var groupId = 0 // Menu.NONE; ungrouped
-                        menu.forEach {
-                            if (it.isSeparator) {
-                                groupId++
+                        val menu = popup.menu
+                        val hasDivider =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && !DeviceUtil.isHMOS) {
+                                menu.setGroupDividerEnabled(true)
+                                true
                             } else {
-                                popup.menu.add(groupId, 0, 0, it.shortText).apply {
+                                false
+                            }
+                        var groupId = 0 // Menu.NONE; ungrouped
+                        actions.forEach {
+                            if (it.isSeparator) {
+                                if (hasDivider) {
+                                    groupId++
+                                } else {
+                                    val dividerString = buildSpannedString {
+                                        color(context.styledColor(android.R.attr.colorForeground).alpha(0.4f)) {
+                                            append("──────────")
+                                        }
+                                    }
+                                    menu.add(groupId, 0, 0, dividerString).apply {
+                                        isEnabled = false
+                                    }
+                                }
+                            } else {
+                                menu.add(groupId, 0, 0, it.shortText).apply {
                                     setOnMenuItemClickListener { _ ->
                                         activateAction(it)
                                         true
@@ -100,7 +131,8 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                                 }
                             }
                         }
-                        MenuCompat.setGroupDividerEnabled(popup.menu, true)
+                        popupMenu?.dismiss()
+                        popupMenu = popup
                         popup.show()
                     }
                     is StatusAreaEntry.Android -> when (entry.type) {
@@ -111,6 +143,9 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                         }
                         ReloadConfig -> fcitx.launchOnReady { f ->
                             f.reloadConfig()
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                SubtypeManager.syncWith(f.enabledIme())
+                            }
                             service.lifecycleScope.launch {
                                 Toast.makeText(service, R.string.done, Toast.LENGTH_SHORT).show()
                             }
@@ -179,5 +214,7 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
     }
 
     override fun onDetached() {
+        popupMenu?.dismiss()
+        popupMenu = null
     }
 }

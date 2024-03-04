@@ -1,6 +1,11 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.core
 
 import android.content.Context
+import android.os.Build
 import androidx.annotation.Keep
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.BufferOverflow
@@ -203,7 +208,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             appLib: String,
             extData: String,
             extCache: String,
-            extDomains: Array<String>
+            extDomains: Array<String>,
+            libraryNames: Array<String>,
+            libraryDependencies: Array<Array<String>>
         )
 
         @JvmStatic
@@ -350,16 +357,6 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         // will be called in fcitx main thread
         private fun onFirstRun() {
             Timber.i("onFirstRun")
-            getFcitxGlobalConfig()?.get("cfg")?.run {
-                get("Behavior")["PreeditEnabledByDefault"].value = "False"
-                setFcitxGlobalConfig(this)
-            }
-            getFcitxAddonConfig("pinyin")?.get("cfg")?.run {
-                get("PreeditInApplication").value = "False"
-                get("PreeditCursorPositionAtBeginning").value = "False"
-                get("QuickPhraseKey").value = ""
-                setFcitxAddonConfig("pinyin", this)
-            }
             firstRun = false
         }
 
@@ -383,14 +380,21 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             val locale = Locales.fcitxLocale
             val dataDir = DataManager.dataDir.absolutePath
             val plugins = DataManager.getLoadedPlugins()
-            val nativeLibDir = buildString {
-                append(context.applicationInfo.nativeLibraryDir)
-                plugins.forEach {
-                    append(':')
-                    append(it.nativeLibraryDir)
+            val nativeLibDir = StringBuilder(context.applicationInfo.nativeLibraryDir)
+            val extDomains = arrayListOf<String>()
+            val libraryNames = arrayListOf<String>()
+            val libraryDependency = arrayListOf<Array<String>>()
+            plugins.forEach {
+                nativeLibDir.append(':')
+                nativeLibDir.append(it.nativeLibraryDir)
+                it.domain?.let { d ->
+                    extDomains.add(d)
+                }
+                it.libraryDependency.forEach { (lib, dep) ->
+                    libraryNames.add(lib)
+                    libraryDependency.add(dep.toTypedArray())
                 }
             }
-            val extDomains = plugins.mapNotNull { it.domain }.toTypedArray()
             Timber.d(
                 """
                Starting fcitx with:
@@ -404,11 +408,18 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
                 startupFcitx(
                     locale,
                     dataDir,
-                    nativeLibDir,
+                    nativeLibDir.toString(),
                     (getExternalFilesDir(null) ?: filesDir).absolutePath,
                     (externalCacheDir ?: cacheDir).absolutePath,
-                    extDomains
+                    extDomains.toTypedArray(),
+                    libraryNames.toTypedArray(),
+                    libraryDependency.toTypedArray()
                 )
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                lifecycle.launchWhenReady {
+                    SubtypeManager.syncWith(enabledIme())
+                }
             }
         }
 
@@ -426,7 +437,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
     })
 
-    private suspend fun <T> withFcitxContext(block: suspend () -> T): T =
+    private suspend inline fun <T> withFcitxContext(crossinline block: suspend () -> T): T =
         withContext(dispatcher) {
             block()
         }
@@ -450,7 +461,16 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         when (event) {
             is FcitxEvent.ReadyEvent -> lifecycleRegistry.postEvent(FcitxLifecycle.Event.ON_READY)
             is FcitxEvent.IMChangeEvent -> inputMethodEntryCached = event.data
-            is FcitxEvent.StatusAreaEvent -> statusAreaActionsCached = event.data
+            is FcitxEvent.StatusAreaEvent -> {
+                val (actions, im) = event.data
+                statusAreaActionsCached = actions
+                // Engine subMode update won't trigger IMChangeEvent, but usually updates StatusArea
+                if (im != inputMethodEntryCached) {
+                    inputMethodEntryCached = im
+                    // notify downstream consumers that engine subMode has changed
+                    eventFlow_.tryEmit(FcitxEvent.IMChangeEvent(im))
+                }
+            }
             is FcitxEvent.ClientPreeditEvent -> clientPreeditCached = event.data
             is FcitxEvent.InputPanelEvent -> inputPanelCached = event.data
             else -> {}

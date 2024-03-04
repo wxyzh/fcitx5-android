@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.core.data
 
 import android.annotation.SuppressLint
@@ -9,10 +13,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.fcitx.fcitx5.android.BuildConfig
 import org.fcitx.fcitx5.android.core.data.DataManager.dataDir
-import org.fcitx.fcitx5.android.utils.Const
 import org.fcitx.fcitx5.android.utils.FileUtil
 import org.fcitx.fcitx5.android.utils.appContext
-import org.fcitx.fcitx5.android.utils.javaIdRegex
+import org.fcitx.fcitx5.android.utils.isJavaIdentifier
 import org.xmlpull.v1.XmlPullParser
 import timber.log.Timber
 import java.io.File
@@ -35,13 +38,13 @@ object DataManager {
     var synced = false
         private set
 
-    // should be consistent with the deserialization in build.gradle.kts (:app)
-    private fun deserializeDataDescriptor(raw: String) = runCatching {
-        json.decodeFromString<DataDescriptor>(raw)
+    // should be consistent with the deserialization in DataDescriptorPlugin (:build-logic)
+    private fun deserializeDataDescriptor(raw: String): DataDescriptor {
+        return json.decodeFromString<DataDescriptor>(raw)
     }
 
-    private fun serializeDataDescriptor(descriptor: DataDescriptor) = runCatching {
-        json.encodeToString(descriptor)
+    private fun serializeDataDescriptor(descriptor: DataDescriptor): String {
+        return json.encodeToString(descriptor)
     }
 
     // If Android version supports direct boot, we put the hierarchy in device encrypted storage
@@ -53,14 +56,12 @@ object DataManager {
         File(appContext.applicationInfo.dataDir)
     }
 
-    private val destDescriptorFile = File(dataDir, Const.dataDescriptorName)
-
-    private fun AssetManager.getDataDescriptor() =
-        open(Const.dataDescriptorName)
+    private fun AssetManager.getDataDescriptor(): DataDescriptor {
+        return open(BuildConfig.DATA_DESCRIPTOR_NAME)
             .bufferedReader()
             .use { it.readText() }
             .let { deserializeDataDescriptor(it) }
-            .getOrThrow()
+    }
 
     private val loadedPlugins = mutableSetOf<PluginDescriptor>()
     private val failedPlugins = mutableMapOf<String, PluginLoadFailed>()
@@ -76,7 +77,6 @@ object DataManager {
     fun addOnNextSyncedCallback(block: () -> Unit) =
         callbacks.add(block)
 
-    @SuppressLint("DiscouragedApi")
     fun detectPlugins(): Pair<Set<PluginDescriptor>, Map<String, PluginLoadFailed>> {
         val toLoad = mutableSetOf<PluginDescriptor>()
         val preloadFailed = mutableMapOf<String, PluginLoadFailed>()
@@ -89,7 +89,6 @@ object DataManager {
                 PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
             )
         } else {
-            @Suppress("DEPRECATION")
             pm.queryIntentActivities(Intent(PLUGIN_INTENT), PackageManager.MATCH_ALL)
         }.map {
             it.activityInfo.packageName
@@ -100,6 +99,8 @@ object DataManager {
         // Parse plugin.xml
         for (packageName in pluginPackages) {
             val res = pm.getResourcesForApplication(packageName)
+
+            @SuppressLint("DiscouragedApi")
             val resId = res.getIdentifier("plugin", "xml", packageName)
             if (resId == 0) {
                 Timber.w("Failed to get the plugin descriptor of $packageName")
@@ -112,28 +113,49 @@ object DataManager {
             var apiVersion: String? = null
             var description: String? = null
             var hasService = false
+            val libraryDependency = mutableMapOf<String, List<String>>()
+            var library: String? = null
+            var dependency: ArrayList<String>? = null
             var text: String? = null
             while ((eventType != XmlPullParser.END_DOCUMENT)) {
                 when (eventType) {
                     XmlPullParser.TEXT -> text = parser.text
+                    XmlPullParser.START_TAG -> when (parser.name) {
+                        "library" -> {
+                            dependency = arrayListOf()
+                            for (i in 0..<parser.attributeCount) {
+                                if (parser.getAttributeName(i) == "name") {
+                                    library = parser.getAttributeValue(i)
+                                }
+                            }
+                        }
+                    }
                     XmlPullParser.END_TAG -> when (parser.name) {
                         "apiVersion" -> apiVersion = text
                         "domain" -> domain = text
                         "description" -> description = text
                         "hasService" -> hasService = text?.lowercase() == "true"
+                        "dependency" -> dependency?.add(text!!)
+                        "library" -> {
+                            if (library != null && dependency != null) {
+                                libraryDependency[library] = dependency
+                                library = null
+                                dependency = null
+                            }
+                        }
                     }
                 }
                 eventType = parser.next()
             }
+            parser.close()
 
-            // Replace @string/ with string resource
-            description = description?.let { d ->
-                d.removePrefix("@string/").let { s ->
-                    if (s.matches(javaIdRegex)) {
-                        res.getIdentifier(s, "string", packageName).let { id ->
-                            if (id != 0) res.getString(id) else d
-                        }
-                    } else d
+            if (description?.startsWith("@string/") == true) {
+                // Replace "@string/" with string resource
+                val s = description.substring(8)
+                if (s.isJavaIdentifier()) {
+                    @SuppressLint("DiscouragedApi")
+                    val id = res.getIdentifier(s, "string", packageName)
+                    if (id != 0) description = res.getString(id)
                 }
             }
 
@@ -145,7 +167,6 @@ object DataManager {
                             PackageManager.PackageInfoFlags.of(PackageManager.GET_META_DATA.toLong())
                         )
                     } else {
-                        @Suppress("DEPRECATION")
                         pm.getPackageInfo(packageName, PackageManager.GET_META_DATA)
                     }
                     toLoad.add(
@@ -156,7 +177,8 @@ object DataManager {
                             description,
                             hasService,
                             info.versionName,
-                            info.applicationInfo.nativeLibraryDir
+                            info.applicationInfo.nativeLibraryDir,
+                            libraryDependency
                         )
                     )
                 } else {
@@ -176,24 +198,15 @@ object DataManager {
         loadedPlugins.clear()
         failedPlugins.clear()
 
+        val destDescriptorFile = File(dataDir, BuildConfig.DATA_DESCRIPTOR_NAME)
+
         // load last run's data descriptor
-        val oldDescriptor =
-            destDescriptorFile
-                .takeIf { it.exists() && it.isFile }
-                ?.runCatching { readText() }
-                ?.getOrNull()
-                ?.let { deserializeDataDescriptor(it) }
-                ?.getOrNull()
-                ?: DataDescriptor("", mapOf(), mapOf())
+        val oldDescriptor = destDescriptorFile
+            .runCatching { deserializeDataDescriptor(bufferedReader().use { it.readText() }) }
+            .getOrElse { DataDescriptor("", emptyMap(), emptyMap()) }
 
         // load app's data descriptor
-        val mainDescriptor =
-            appContext.assets
-                .open(Const.dataDescriptorName)
-                .bufferedReader()
-                .use { it.readText() }
-                .let { deserializeDataDescriptor(it) }
-                .getOrThrow()
+        val mainDescriptor = appContext.assets.getDataDescriptor()
 
         val (parsedDescriptors, failed) = detectPlugins()
         failedPlugins.putAll(failed)
@@ -265,13 +278,15 @@ object DataManager {
             }
         }
         // save the new hierarchy as the data descriptor to be used in the next run
-        destDescriptorFile.writeText(serializeDataDescriptor(newHierarchy.downToDataDescriptor()).getOrThrow())
+        destDescriptorFile.bufferedWriter().use {
+            it.write(serializeDataDescriptor(newHierarchy.downToDataDescriptor()))
+        }
         callbacks.forEach { it() }
         callbacks.clear()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             // remove old assets from credential encrypted storage
             val oldDataDir = appContext.dataDir
-            val oldDataDescriptor = oldDataDir.resolve(Const.dataDescriptorName)
+            val oldDataDescriptor = oldDataDir.resolve(BuildConfig.DATA_DESCRIPTOR_NAME)
             if (oldDataDescriptor.exists()) {
                 oldDataDescriptor.delete()
                 oldDataDir.resolve("README.md").delete()
@@ -299,7 +314,7 @@ object DataManager {
 
     fun deleteAndSync() {
         lock.withLock {
-            dataDir.resolve(Const.dataDescriptorName).delete()
+            dataDir.resolve(BuildConfig.DATA_DESCRIPTOR_NAME).delete()
             dataDir.resolve("README.md").delete()
             dataDir.resolve("usr").deleteRecursively()
         }

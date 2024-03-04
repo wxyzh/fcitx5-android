@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 #ifndef FCITX5_ANDROID_JNI_UTILS_H
 #define FCITX5_ANDROID_JNI_UTILS_H
 
@@ -128,6 +132,12 @@ public:
     jclass FormattedText;
     jmethodID FormattedTextFromByteCursor;
 
+    jclass PinyinCustomPhrase;
+    jmethodID PinyinCustomPhraseInit;
+    jfieldID PinyinCustomPhraseKey;
+    jfieldID PinyinCustomPhraseOrder;
+    jfieldID PinyinCustomPhraseValue;
+
     GlobalRefSingleton(JavaVM *jvm_) : jvm(jvm_) {
         JNIEnv *env;
         jvm->AttachCurrentThread(&env, nullptr);
@@ -168,6 +178,12 @@ public:
 
         FormattedText = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/FormattedText")));
         FormattedTextFromByteCursor = env->GetStaticMethodID(FormattedText, "fromByteCursor", "([Ljava/lang/String;[II)Lorg/fcitx/fcitx5/android/core/FormattedText;");
+
+        PinyinCustomPhrase = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/data/pinyin/customphrase/PinyinCustomPhrase")));
+        PinyinCustomPhraseInit = env->GetMethodID(PinyinCustomPhrase, "<init>", "(Ljava/lang/String;ILjava/lang/String;)V");
+        PinyinCustomPhraseKey = env->GetFieldID(PinyinCustomPhrase, "key", "Ljava/lang/String;");
+        PinyinCustomPhraseOrder = env->GetFieldID(PinyinCustomPhrase, "order", "I");
+        PinyinCustomPhraseValue = env->GetFieldID(PinyinCustomPhrase, "value", "Ljava/lang/String;");
     }
 
     const JEnv AttachEnv() const { return JEnv(jvm); }

@@ -12,10 +12,12 @@ jobs:
   build_pull_request:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os:
           - ubuntu-22.04
           - macos-13
+          - macos-14
           - windows-2022
         abi:
           - armeabi-v7a
@@ -34,17 +36,17 @@ jobs:
       - name: Regenerate symlinks pointing to submodule (Windows)
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
-          Remove-Item -Recurse app/src/main/assets/usr/share
-          git checkout -- *
+          Remove-Item -Recurse app/src/main/assets/usr/share, plugin/hangul/src/main/assets/usr/share/libhangul, plugin/chewing/src/main/assets/usr/share/libchewing, plugin/jyutping/src/main/assets/usr/share/libime
+          git checkout -- .
 
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Setup Android environment
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v3
 
       - name: Install Android NDK
         run: |
@@ -57,13 +59,14 @@ jobs:
           sudo apt install extra-cmake-modules gettext
 
       - name: Install system dependencies (macOS)
-        if: ${{ matrix.os == 'macos-13' }}
+        if: ${{ startsWith(matrix.os, 'macos') }}
         run: |
           brew install extra-cmake-modules
 
       - name: Install system dependencies (Windows)
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
+          C:/msys64/usr/bin/pacman -Syu --noconfirm
           C:/msys64/usr/bin/pacman -S --noconfirm mingw-w64-ucrt-x86_64-gettext mingw-w64-ucrt-x86_64-extra-cmake-modules
           Add-Content $env:GITHUB_PATH "C:/msys64/ucrt64/bin"
 
@@ -76,7 +79,7 @@ jobs:
           ./gradlew :assembleDebugPlugins
 
       - name: Upload app
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.os }}-${{ matrix.abi }}
           path: app/build/outputs/apk/debug/
@@ -94,7 +97,7 @@ jobs:
           done
 
       - name: Upload plugins
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: plugins-${{ matrix.os }}-${{ matrix.abi }}
           path: plugins-to-upload

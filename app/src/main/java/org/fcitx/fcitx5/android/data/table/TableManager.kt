@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.data.table
 
 import org.fcitx.fcitx5.android.R
@@ -22,19 +26,15 @@ object TableManager {
     ).also { it.mkdirs() }
 
     fun inputMethods(): List<TableBasedInputMethod> =
-        inputMethodDir
-            .listFiles()
-            ?.mapNotNull { confFile ->
-                runCatching {
-                    TableBasedInputMethod.new(confFile).apply {
-                        table = runCatching {
-                            File(tableDicDir, tableFileName)
-                                .takeIf { it.extension == "dict" }
-                                ?.let { LibIMEDictionary(it) }
-                        }.getOrNull()
+        inputMethodDir.listFiles()?.mapNotNull { confFile ->
+            runCatching {
+                TableBasedInputMethod.new(confFile).apply {
+                    runCatching {
+                        table = LibIMEDictionary(File(tableDicDir, tableFileName))
                     }
-                }.getOrNull()
-            } ?: listOf()
+                }
+            }.getOrNull()
+        } ?: emptyList()
 
     fun importFromZip(src: InputStream): Result<TableBasedInputMethod> =
         runCatching {
@@ -91,6 +91,27 @@ object TableManager {
         }
         im.save()
         return im
+    }
+
+    fun replaceTableDict(
+        im: TableBasedInputMethod,
+        dictName: String,
+        dictStream: InputStream
+    ): Result<LibIMEDictionary> = runCatching {
+        withTempDir { tempDir ->
+            val dictFile = File(tempDir, dictName).also {
+                it.outputStream().use { o -> dictStream.use { i -> i.copyTo(o) } }
+            }
+            val dict = Dictionary.new(dictFile)!!
+            runCatching {
+                dict.toLibIMEDictionary(File(tempDir, im.tableFileName))
+            }.onSuccess {
+                it.file.copyTo(File(tableDicDir, im.tableFileName), overwrite = true)
+            }.onFailure {
+                dictFile.delete()
+                errorRuntime(R.string.invalid_table_dict, it.message)
+            }.getOrThrow()
+        }
     }
 
     @JvmStatic

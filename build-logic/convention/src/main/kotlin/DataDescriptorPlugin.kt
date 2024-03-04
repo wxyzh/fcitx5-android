@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import org.gradle.api.DefaultTask
@@ -133,7 +137,7 @@ class DataDescriptorPlugin : Plugin<Project> {
                     return@forEach
                 logger.log(LogLevel.DEBUG, "${change.changeType}: ${change.normalizedPath}")
                 val relativeFile = change.file.relativeTo(file.parentFile)
-                val key = relativeFile.path
+                val key = relativeFile.path.replace(File.separatorChar, '/')
                 if (change.changeType == ChangeType.REMOVED || key in excludes.get()) {
                     map.remove(key)
                 } else {

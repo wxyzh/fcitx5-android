@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(fcitx5-android-lib-fcitx5 VERSION 0.0.7)
+project(fcitx5-android-lib-fcitx5 VERSION 0.0.8)
 
 # For reproducible build
 add_link_options("LINKER:--hash-style=gnu,--build-id=none")
@@ -26,9 +26,10 @@ find_package(fmt)
 set(LibIntl_DIR "${PREBUILT_DIR}/libintl-lite/${ANDROID_ABI}/lib/cmake")
 find_package(LibIntl)
 
-# prebuilt libevent
-set(Libevent_DIR "${PREBUILT_DIR}/libevent/${ANDROID_ABI}/lib/cmake/libevent")
-find_package(Libevent)
+# prebuilt libuv
+set(libuv_DIR "${PREBUILT_DIR}/libuv/${ANDROID_ABI}/lib/cmake/libuv")
+find_package(libuv)
+set(LIBUV_TARGET libuv::uv_a)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Fcitx5AndroidInstallDirs.cmake")
 # LIBDATADIR is not a standard CMake install dir, defined in fcitx5/CMakeLists.txt#L169

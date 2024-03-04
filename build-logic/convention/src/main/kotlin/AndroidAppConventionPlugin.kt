@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
 import com.mikepenz.aboutlibraries.plugin.AboutLibrariesExtension
@@ -60,6 +64,7 @@ class AndroidAppConventionPlugin : AndroidBaseConventionPlugin() {
                     tasks.findByName(DataDescriptorPlugin.TASK)?.also {
                         tasks.getByName("merge${variantName}Assets").dependsOn(it)
                         tasks.getByName("lintVitalAnalyzeRelease").dependsOn(it)
+                        tasks.getByName("generateReleaseLintVitalReportModel").dependsOn(it)
                     }
                 }
             }

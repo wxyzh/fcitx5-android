@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.common
 
 import android.annotation.SuppressLint
@@ -11,7 +15,7 @@ import androidx.annotation.CallSuper
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import org.fcitx.fcitx5.android.ui.main.MainViewModel
-import java.util.*
+import java.util.Collections
 
 abstract class DynamicListAdapter<T>(
     initialEntries: List<T>,

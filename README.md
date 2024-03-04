@@ -20,9 +20,15 @@ GitHub: [![release version](https://img.shields.io/github/v/release/fcitx5-andro
 ### Supported Languages
 
 - English (with spell check)
-- Chinese (Pinyin, Shuangpin, Wubi, Cangjie and custom tables)
-- Vietnamese (Based on UniKey, supports Telex, VNI and VIQR)
+- Chinese
+  - Pinyin, Shuangpin, Wubi, Cangjie and custom tables (built-in, powered by [fcitx5-chinese-addons](https://github.com/fcitx/fcitx5-chinese-addons))
+  - Zhuyin/Bopomofo (via [Chewing Plugin](./plugin/chewing))
+  - Jyutping (via [Jyutping Plugin](./plugin/jyutping/), powered by [libime-jyutping](https://github.com/fcitx/libime-jyutping))
+- Vietnamese (via [UniKey Plugin](./plugin/unikey), supports Telex, VNI and VIQR)
 - Japanese (via [Anthy Plugin](./plugin/anthy))
+- Korean (via [Hangul Plugin](./plugin/hangul))
+- Sinhala (via [Sayura Plugin](./plugin/sayura))
+- Generic (via [RIME Plugin](./plugin/rime), supports importing custom schemas)
 
 ### Implemented Features
 
@@ -44,7 +50,7 @@ GitHub: [![release version](https://img.shields.io/github/v/release/fcitx5-andro
 
 |拼音, Material Light theme, key border enabled|自然码双拼, Pixel Dark theme, key border disabled|
 |:-:|:-:|
-|<img src="https://user-images.githubusercontent.com/13914967/202180575-04b6db41-ff24-4bef-899a-8051fc0243f5.png" width="360px">|<img src="https://user-images.githubusercontent.com/13914967/202180709-457e4897-961f-48a6-8fb2-b6560568a122.png" width="360px">|
+|<img src="https://github.com/fcitx5-android/fcitx5-android/assets/13914967/bd429247-62d9-4c78-bab8-70ef3ce47588" width="360px">|<img src="https://github.com/fcitx5-android/fcitx5-android/assets/13914967/3ae969c1-7ed0-4f92-a5df-19dc8c90a8c3" width="360px">|
 
 |Emoji picker, Pixel Light theme, key border enabled|Symbol picker, Material Dark theme, key border disabled|
 |:-:|:-:|
@@ -56,14 +62,14 @@ Trello kanban: https://trello.com/b/gftk6ZdV/kanban
 
 Matrix Room: https://matrix.to/#/#fcitx5-android:mozilla.org
 
-Discuss on Telegram: https://t.me/+hci-DrFVWUM3NTUx ([@fcitx5_android](https://t.me/fcitx5_android) originally)
+Discuss on Telegram: [@fcitx5_android_group](https://t.me/fcitx5_android_group) ([@fcitx5_android](https://t.me/fcitx5_android) originally)
 
 ## Build
 
 ### Dependencies
 
-- Android SDK Platform & Build-Tools 33.
-- Android NDK (Side by side) 25 & CMake 3.22.1, they can be installed using SDK Manager in Android Studio or `sdkmanager` command line. **Note:** NDK 21 & 22 are confirmed not working with this project.
+- Android SDK Platform & Build-Tools 34.
+- Android NDK (Side by side) 25 & CMake 3.22.1, they can be installed using SDK Manager in Android Studio or `sdkmanager` command line.
 - [KDE/extra-cmake-modules](https://github.com/KDE/extra-cmake-modules)
 - GNU Gettext >= 0.20 (for `msgfmt` binary; or install `appstream` if you really have to use gettext <= 0.19.)
 
@@ -76,7 +82,7 @@ Discuss on Telegram: https://t.me/+hci-DrFVWUM3NTUx ([@fcitx5_android](https://t
 
 - Enable symlink support for `git`:
 
-    ```powershell
+    ```shell
     git config --global core.symlinks true
     ```
 
@@ -84,7 +90,7 @@ Discuss on Telegram: https://t.me/+hci-DrFVWUM3NTUx ([@fcitx5_android](https://t
 
 First, clone this repository and fetch all submodules:
 
-```sh
+```shell
 git clone git@github.com:fcitx5-android/fcitx5-android.git
 git submodule update --init --recursive
 ```
@@ -92,8 +98,21 @@ git submodule update --init --recursive
 <details>
 <summary>On Windows, you may need to regenerate symlinks to submodules.</summary>
 
+Run in PowerShell:
+
 ```powershell
-Remove-Item -Recurse app/src/main/assets/usr/share
+Remove-Item -Recurse app/src/main/assets/usr/share, plugin/hangul/src/main/assets/usr/share/libhangul, plugin/chewing/src/main/assets/usr/share/libchewing, plugin/jyutping/src/main/assets/usr/share/libime
+```
+
+Or Command Prompt:
+
+```bat
+RD /S /Q app\src\main\assets\usr\share plugin\hangul\src\main\assets\usr\share\libhangul plugin\chewing\src\main\assets\usr\share\libchewing plugin\jyutping\src\main\assets\usr\share\libime
+```
+
+Then let `git` regenerate symlinks:
+
+```shell
 git checkout -- .
 ```
 
@@ -101,7 +120,7 @@ git checkout -- .
 
 Install `extra-cmake-modules` and `gettext` with your system package manager:
 
-```sh
+```shell
 # For Arch Linux (Arch has gettext in it's base meta package)
 sudo pacman -S extra-cmake-modules
 
@@ -113,7 +132,7 @@ brew install extra-cmake-modules gettext
 
 # For Windows, install MSYS2 and execute in its shell (UCRT64)
 pacman -S mingw-w64-ucrt-x86_64-extra-cmake-modules mingw-w64-ucrt-x86_64-gettext
-# then add C:/msys64/ucrt64/bin to PATH
+# then add C:\msys64\ucrt64\bin to PATH
 ```
 
 Install Android SDK Platform, Android SDK Build-Tools, Android NDK and cmake via SDK Manager in Android Studio:
@@ -142,7 +161,7 @@ The current recommended versions are recorded in [Versions.kt](build-logic/conve
 
     Switch to "Project" view in the "Project" tool window (namely the file tree side bar), right click `lib/fcitx5/src/main/cpp/prebuilt` directory, then select "Mark Directory as > Excluded". You may also need to restart the IDE to interrupt ongoing indexing process.
 
-- Gradle error: "No variants found for ':app'. Check build files to ensure at least one variant exists."
+- Gradle error: "No variants found for ':app'. Check build files to ensure at least one variant exists." or "[CXX1210] <whatever>/CMakeLists.txt debug|arm64-v8a : No compatible library found"
 
     Examine if there are environment variables set such as `_JAVA_OPTIONS` or `JAVA_TOOL_OPTIONS`. You might want to clear them (maybe in the startup script `studio.sh` of Android Studio), as some gradle plugin treats anything in stderr as errors and aborts.
 

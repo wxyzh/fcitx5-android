@@ -1,15 +1,15 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input.editing
 
 import android.view.KeyEvent
 import android.view.View
 import org.fcitx.fcitx5.android.R
-import org.fcitx.fcitx5.android.core.FcitxKeyMapping
-import org.fcitx.fcitx5.android.daemon.FcitxConnection
-import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardWindow
-import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView
@@ -22,7 +22,6 @@ class TextEditingWindow : InputWindow.ExtendedInputWindow<TextEditingWindow>(),
 
     private val service: FcitxInputMethodService by manager.inputMethodService()
     private val windowManager: InputWindowManager by manager.must()
-    private val fcitx: FcitxConnection by manager.fcitx()
     private val theme by manager.theme()
 
     private var hasSelection = false
@@ -79,9 +78,7 @@ class TextEditingWindow : InputWindow.ExtendedInputWindow<TextEditingWindow>(),
             }
             backspaceButton.onClickWithRepeating {
                 userSelection = false
-                fcitx.launchOnReady {
-                    it.sendKey(FcitxKeyMapping.FcitxKey_BackSpace)
-                }
+                service.sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
             }
             clipboardButton.setOnClickListener {
                 windowManager.attachWindow(ClipboardWindow())

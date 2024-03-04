@@ -1,51 +1,33 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings.theme
 
-import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.Keep
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
+import org.fcitx.fcitx5.android.data.theme.ThemeFilesManager
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.ui.common.withLoadingDialog
 import org.fcitx.fcitx5.android.utils.applyNavBarInsetsBottomPadding
-import org.fcitx.fcitx5.android.utils.errorDialog
+import org.fcitx.fcitx5.android.utils.importErrorDialog
 import org.fcitx.fcitx5.android.utils.queryFileName
 import org.fcitx.fcitx5.android.utils.toast
-import splitties.dimensions.dp
-import splitties.resources.drawable
-import splitties.resources.resolveThemeAttribute
-import splitties.resources.styledColor
 import splitties.resources.styledDrawable
-import splitties.views.backgroundColor
-import splitties.views.dsl.constraintlayout.below
-import splitties.views.dsl.constraintlayout.bottomOfParent
-import splitties.views.dsl.constraintlayout.constraintLayout
-import splitties.views.dsl.constraintlayout.endOfParent
-import splitties.views.dsl.constraintlayout.lParams
-import splitties.views.dsl.constraintlayout.startOfParent
-import splitties.views.dsl.constraintlayout.topOfParent
-import splitties.views.dsl.core.add
-import splitties.views.dsl.core.imageButton
-import splitties.views.dsl.core.textView
-import splitties.views.dsl.core.wrapContent
-import splitties.views.gravityVerticalCenter
-import splitties.views.imageDrawable
-import splitties.views.textAppearance
 import java.util.UUID
 
 class ThemeListFragment : Fragment() {
@@ -56,11 +38,9 @@ class ThemeListFragment : Fragment() {
 
     private lateinit var exportLauncher: ActivityResultLauncher<String>
 
-    private lateinit var previewUi: KeyboardPreviewUi
+    private lateinit var themeListAdapter: ThemeListAdapter
 
-    private lateinit var adapter: ThemeListAdapter
-
-    private lateinit var themeList: RecyclerView
+    private var followSystemDayNightTheme by ThemeManager.prefs.followSystemDayNightTheme
 
     private var beingExported: Theme.Custom? = null
 
@@ -71,33 +51,29 @@ class ThemeListFragment : Fragment() {
         }
     }
 
-    private var followSystemDayNightTheme by ThemeManager.prefs.followSystemDayNightTheme
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         imageLauncher = registerForActivityResult(CustomThemeActivity.Contract()) { result ->
-            if (result != null) {
-                when (result) {
-                    is CustomThemeActivity.BackgroundResult.Created -> {
-                        val theme = result.theme
-                        adapter.prependTheme(theme)
-                        ThemeManager.saveTheme(theme)
-                        if (!followSystemDayNightTheme) {
-                            ThemeManager.switchTheme(theme)
-                        }
+            if (result == null) return@registerForActivityResult
+            when (result) {
+                is CustomThemeActivity.BackgroundResult.Created -> {
+                    val theme = result.theme
+                    themeListAdapter.prependTheme(theme)
+                    ThemeManager.saveTheme(theme)
+                    if (!followSystemDayNightTheme) {
+                        ThemeManager.setNormalModeTheme(theme)
                     }
-                    is CustomThemeActivity.BackgroundResult.Deleted -> {
-                        val name = result.name
-                        // Update the list first, as we rely on theme changed listener
-                        // in the case that the deleted theme was active
-                        adapter.removeTheme(name)
-                        ThemeManager.deleteTheme(name)
-                    }
-                    is CustomThemeActivity.BackgroundResult.Updated -> {
-                        val theme = result.theme
-                        adapter.replaceTheme(theme)
-                        ThemeManager.saveTheme(theme)
-                    }
+                }
+                is CustomThemeActivity.BackgroundResult.Deleted -> {
+                    val name = result.name
+                    themeListAdapter.removeTheme(name)
+                    ThemeManager.deleteTheme(name)
+                }
+                is CustomThemeActivity.BackgroundResult.Updated -> {
+                    val theme = result.theme
+                    themeListAdapter.replaceTheme(theme)
+                    ThemeManager.saveTheme(theme)
                 }
             }
         }
@@ -109,26 +85,28 @@ class ThemeListFragment : Fragment() {
                 lifecycleScope.withLoadingDialog(ctx) {
                     withContext(NonCancellable + Dispatchers.IO) {
                         val name = cr.queryFileName(uri) ?: return@withContext
-                        if (!name.endsWith(".zip")) {
-                            importErrorDialog(getString(R.string.exception_theme_filename))
+                        val ext = name.substringAfterLast('.')
+                        if (ext != "zip") {
+                            ctx.importErrorDialog(R.string.exception_theme_filename, ext)
                             return@withContext
                         }
                         try {
                             val inputStream = cr.openInputStream(uri)!!
-                            val (newCreated, theme, migrated) = ThemeManager.importTheme(inputStream)
-                                .getOrThrow()
+                            val (newCreated, theme, migrated) =
+                                ThemeFilesManager.importTheme(inputStream).getOrThrow()
+                            ThemeManager.refreshThemes()
                             withContext(Dispatchers.Main) {
                                 if (newCreated) {
-                                    adapter.prependTheme(theme)
+                                    themeListAdapter.prependTheme(theme)
                                 } else {
-                                    adapter.replaceTheme(theme)
+                                    themeListAdapter.replaceTheme(theme)
                                 }
                                 if (migrated) {
                                     ctx.toast(R.string.theme_migrated)
                                 }
                             }
                         } catch (e: Exception) {
-                            importErrorDialog(e.localizedMessage ?: e.stackTraceToString())
+                            ctx.importErrorDialog(e)
                         }
                     }
                 }
@@ -143,10 +121,10 @@ class ThemeListFragment : Fragment() {
                     withContext(NonCancellable + Dispatchers.IO) {
                         try {
                             val outputStream = ctx.contentResolver.openOutputStream(uri)!!
-                            ThemeManager.exportTheme(exported, outputStream).getOrThrow()
+                            ThemeFilesManager.exportTheme(exported, outputStream).getOrThrow()
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                ctx.toast(e.localizedMessage ?: e.stackTraceToString())
+                                ctx.toast(e)
                             }
                         }
                     }
@@ -154,99 +132,36 @@ class ThemeListFragment : Fragment() {
             }
     }
 
-    private suspend fun importErrorDialog(message: String) {
-        errorDialog(requireContext(), getString(R.string.import_error), message)
-    }
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View = with(requireContext()) {
-        val activeTheme = ThemeManager.getActiveTheme()
-
-        previewUi = KeyboardPreviewUi(this, activeTheme)
-        val preview = previewUi.root.apply {
-            scaleX = 0.5f
-            scaleY = 0.5f
-            outlineProvider = ViewOutlineProvider.BOUNDS
-            elevation = dp(4f)
+    ): View {
+        themeListAdapter = object : ThemeListAdapter() {
+            override fun onAddNewTheme() = addTheme()
+            override fun onSelectTheme(theme: Theme) = selectTheme(theme)
+            override fun onEditTheme(theme: Theme.Custom) = editTheme(theme)
+            override fun onExportTheme(theme: Theme.Custom) = exportTheme(theme)
         }
-
-        val settingsText = textView {
-            setText(R.string.configure_theme)
-            textAppearance = resolveThemeAttribute(android.R.attr.textAppearanceListItem)
-            gravity = gravityVerticalCenter
-        }
-        val settingsButton = imageButton {
-            imageDrawable = drawable(R.drawable.ic_baseline_settings_24)?.apply {
-                setTint(styledColor(android.R.attr.colorControlNormal))
-            }
-            background = styledDrawable(android.R.attr.actionBarItemBackground)
-            setOnClickListener {
-                findNavController().navigate(R.id.action_themeListFragment_to_themeSettingsFragment)
-            }
-        }
-
-        val previewWrapper = constraintLayout {
-            add(preview, lParams(wrapContent, wrapContent) {
-                topOfParent(dp(-52))
-                startOfParent()
-                endOfParent()
-            })
-            add(settingsText, lParams(wrapContent, dp(48)) {
-                startOfParent(dp(64))
-                bottomOfParent(dp(4))
-            })
-            add(settingsButton, lParams(dp(48), dp(48)) {
-                endOfParent(dp(64))
-                bottomOfParent(dp(4))
-            })
-            backgroundColor = styledColor(android.R.attr.colorPrimary)
-            elevation = dp(4f)
-        }
-
-        themeList = ResponsiveThemeListView(this).apply {
-            this@ThemeListFragment.adapter = object : ThemeListAdapter() {
-                override fun onAddNewTheme() = addTheme()
-                override fun onSelectTheme(theme: Theme) = selectTheme(theme)
-                override fun onEditTheme(theme: Theme.Custom) = editTheme(theme)
-                override fun onExportTheme(theme: Theme.Custom) = exportTheme(theme)
-            }.apply {
-                setThemes(ThemeManager.getAllThemes())
-            }
-            adapter = this@ThemeListFragment.adapter
-            updateSelectedThemes()
-            applyNavBarInsetsBottomPadding()
-        }
-
+        ThemeManager.refreshThemes()
+        themeListAdapter.setThemes(ThemeManager.getAllThemes())
+        updateSelectedThemes()
         ThemeManager.addOnChangedListener(onThemeChangeListener)
-
-        constraintLayout {
-            add(previewWrapper, lParams(height = wrapContent) {
-                topOfParent()
-                startOfParent()
-                endOfParent()
-            })
-            add(themeList, lParams {
-                below(previewWrapper)
-                startOfParent()
-                endOfParent()
-                bottomOfParent()
-            })
+        return ResponsiveThemeListView(requireContext()).apply {
+            adapter = themeListAdapter
+            applyNavBarInsetsBottomPadding()
         }
     }
 
     private fun updateSelectedThemes(activeTheme: Theme? = null) {
-        val active = activeTheme ?: ThemeManager.getActiveTheme()
-        previewUi.setTheme(active)
+        val active = activeTheme ?: ThemeManager.activeTheme
         var light: Theme? = null
         var dark: Theme? = null
         if (followSystemDayNightTheme) {
             light = ThemeManager.prefs.lightModeTheme.getValue()
             dark = ThemeManager.prefs.darkModeTheme.getValue()
         }
-        adapter.setSelectedThemes(active, light, dark)
+        themeListAdapter.setSelectedThemes(active, light, dark)
     }
 
     private fun addTheme() {
@@ -274,11 +189,11 @@ class ThemeListFragment : Fragment() {
                             .setView(view)
                             .create()
                         view.adapter = object :
-                            SimpleThemeListAdapter<Theme.Builtin>(ThemeManager.builtinThemes) {
+                            SimpleThemeListAdapter<Theme.Builtin>(ThemeManager.BuiltinThemes) {
                             override fun onClick(theme: Theme.Builtin) {
                                 val newTheme =
                                     theme.deriveCustomNoBackground(UUID.randomUUID().toString())
-                                adapter.prependTheme(newTheme)
+                                themeListAdapter.prependTheme(newTheme)
                                 ThemeManager.saveTheme(newTheme)
                                 dialog.dismiss()
                             }
@@ -295,19 +210,20 @@ class ThemeListFragment : Fragment() {
             val ctx = requireContext()
             AlertDialog.Builder(ctx)
                 .setIcon(ctx.styledDrawable(android.R.attr.alertDialogIcon))
-                .setTitle(R.string.configure_theme)
+                .setTitle(R.string.configure)
                 .setMessage(R.string.theme_message_follow_system_day_night_mode_enabled)
                 .setPositiveButton(android.R.string.ok, null)
                 .setNegativeButton(R.string.disable_it) { _, _ ->
                     followSystemDayNightTheme = false
                     lifecycleScope.launch {
+                        ThemeManager.setNormalModeTheme(theme)
                         updateSelectedThemes()
                     }
                 }
                 .show()
             return
         }
-        ThemeManager.switchTheme(theme)
+        ThemeManager.setNormalModeTheme(theme)
     }
 
     private fun editTheme(theme: Theme.Custom) {
@@ -317,13 +233,6 @@ class ThemeListFragment : Fragment() {
     private fun exportTheme(theme: Theme.Custom) {
         beingExported = theme
         exportLauncher.launch(theme.name + ".zip")
-    }
-
-    override fun onStop() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ThemeManager.syncToDeviceEncryptedStorage()
-        }
-        super.onStop()
     }
 
     override fun onDestroy() {

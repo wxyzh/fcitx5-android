@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
@@ -30,7 +34,7 @@ import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
-import org.fcitx.fcitx5.android.data.theme.ThemeManager.Prefs.NavbarBackground
+import org.fcitx.fcitx5.android.data.theme.ThemePrefs.NavbarBackground
 import org.fcitx.fcitx5.android.input.bar.KawaiiBarComponent
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcaster
 import org.fcitx.fcitx5.android.input.broadcast.PreeditEmptyStateComponent
@@ -349,6 +353,7 @@ class InputView(
                 endToStartOf(rightPaddingSpace)
             }
         }
+        preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
         kawaiiBar.view.setPadding(sidePadding, 0, sidePadding, 0)
     }
 
@@ -396,17 +401,8 @@ class InputView(
                 broadcaster.onImeUpdate(it.data)
             }
             is FcitxEvent.StatusAreaEvent -> {
-                // Engine subMode update won't trigger IMChangeEvent, but usually updates StatusArea
-                fcitx.launchOnReady {
-                    val ime = it.currentIme()
-                    if (ime != it.inputMethodEntryCached) {
-                        service.lifecycleScope.launch {
-                            broadcaster.onImeUpdate(ime)
-                        }
-                    }
-                }
-                punctuation.updatePunctuationMapping(it.data)
-                broadcaster.onStatusAreaUpdate(it.data)
+                punctuation.updatePunctuationMapping(it.data.actions)
+                broadcaster.onStatusAreaUpdate(it.data.actions)
             }
             else -> {}
         }
