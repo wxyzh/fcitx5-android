@@ -124,3 +124,11 @@ jobs:
         with:
           name: plugins-${{ matrix.os }}-${{ matrix.abi }}
           path: plugins-to-upload
+      
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            app/build/outputs/apk/release/org.fcitx.fcitx5.android*-signed.apk
+            plugins-to-upload/rime*-signed.apk
+            plugins-to-upload/clipboard-filter*-signed.apk
