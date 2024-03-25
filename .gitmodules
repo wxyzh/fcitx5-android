@@ -12,7 +12,7 @@
 	url = https://github.com/fcitx/libime
 [submodule "lib/fcitx5-chinese-addons/src/main/cpp/fcitx5-chinese-addons"]
 	path = lib/fcitx5-chinese-addons/src/main/cpp/fcitx5-chinese-addons
-	url = git@github.com:fcitx/fcitx5-chinese-addons.git
+	url = https://github.com/fcitx/fcitx5-chinese-addons
 [submodule "plugin/anthy/src/main/cpp/anthy-cmake"]
 	path = plugin/anthy/src/main/cpp/anthy-cmake
 	url = https://github.com/fcitx5-android/anthy-cmake
@@ -30,7 +30,7 @@
 	url = https://github.com/rime/rime-prelude
 [submodule "plugin/rime/src/main/cpp/rime-essay"]
 	path = plugin/rime/src/main/cpp/rime-essay
-	url = ghttps://github.com/rime/rime-essay
+	url = https://github.com/rime/rime-essay
 [submodule "plugin/rime/src/main/cpp/rime-luna-pinyin"]
 	path = plugin/rime/src/main/cpp/rime-luna-pinyin
 	url = https://github.com/rime/rime-luna-pinyin
