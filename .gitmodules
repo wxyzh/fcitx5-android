@@ -1,51 +1,51 @@
 [submodule "lib/fcitx5/src/main/cpp/fcitx5"]
 	path = lib/fcitx5/src/main/cpp/fcitx5
-	url = git@github.com:fcitx/fcitx5.git
+	url = https://github.com/fcitx/fcitx5
 [submodule "lib/fcitx5/src/main/cpp/prebuilt"]
 	path = lib/fcitx5/src/main/cpp/prebuilt
 	url = https://github.com/wxyzh/prebuilt
 [submodule "lib/fcitx5-lua/src/main/cpp/fcitx5-lua"]
 	path = lib/fcitx5-lua/src/main/cpp/fcitx5-lua
-	url = git@github.com:fcitx/fcitx5-lua.git
+	url = https://github.com/fcitx/fcitx5-lua
 [submodule "lib/libime/src/main/cpp/libime"]
 	path = lib/libime/src/main/cpp/libime
-	url = git@github.com:fcitx/libime.git
+	url = https://github.com/fcitx/libime
 [submodule "lib/fcitx5-chinese-addons/src/main/cpp/fcitx5-chinese-addons"]
 	path = lib/fcitx5-chinese-addons/src/main/cpp/fcitx5-chinese-addons
-	url = git@github.com:fcitx/fcitx5-chinese-addons.git
+	url = https://github.com/fcitx/fcitx5-chinese-addons
 [submodule "plugin/anthy/src/main/cpp/anthy-cmake"]
 	path = plugin/anthy/src/main/cpp/anthy-cmake
-	url = git@github.com:fcitx5-android/anthy-cmake.git
+	url = https://github.com/fcitx5-android/anthy-cmake
 [submodule "plugin/anthy/src/main/cpp/fcitx5-anthy"]
 	path = plugin/anthy/src/main/cpp/fcitx5-anthy
-	url = git@github.com:fcitx/fcitx5-anthy.git
+	url = https://github.com/fcitx/fcitx5-anthy
 [submodule "plugin/unikey/src/main/cpp/fcitx5-unikey"]
 	path = plugin/unikey/src/main/cpp/fcitx5-unikey
-	url = git@github.com:fcitx/fcitx5-unikey.git
+	url = https://github.com/fcitx/fcitx5-unikey
 [submodule "plugin/rime/src/main/cpp/fcitx5-rime"]
 	path = plugin/rime/src/main/cpp/fcitx5-rime
-	url = git@github.com:fcitx/fcitx5-rime.git
+	url = https://github.com/fcitx/fcitx5-rime
 [submodule "plugin/rime/src/main/cpp/rime-prelude"]
 	path = plugin/rime/src/main/cpp/rime-prelude
-	url = git@github.com:rime/rime-prelude.git
+	url = https://github.com/rime/rime-prelude
 [submodule "plugin/rime/src/main/cpp/rime-essay"]
 	path = plugin/rime/src/main/cpp/rime-essay
-	url = git@github.com:rime/rime-essay.git
+	url = https://github.com/rime/rime-essay
 [submodule "plugin/rime/src/main/cpp/rime-luna-pinyin"]
 	path = plugin/rime/src/main/cpp/rime-luna-pinyin
-	url = git@github.com:rime/rime-luna-pinyin.git
+	url = https://github.com/rime/rime-luna-pinyin
 [submodule "plugin/rime/src/main/cpp/rime-stroke"]
 	path = plugin/rime/src/main/cpp/rime-stroke
-	url = git@github.com:rime/rime-stroke.git
+	url = https://github.com/rime/rime-stroke
 [submodule "plugin/hangul/src/main/cpp/fcitx5-hangul"]
 	path = plugin/hangul/src/main/cpp/fcitx5-hangul
-	url = git@github.com:fcitx/fcitx5-hangul.git
+	url = https://github.com/fcitx/fcitx5-hangul
 [submodule "plugin/chewing/src/main/cpp/fcitx5-chewing"]
 	path = plugin/chewing/src/main/cpp/fcitx5-chewing
-	url = git@github.com:fcitx/fcitx5-chewing.git
+	url = https://github.com/fcitx/fcitx5-chewing
 [submodule "plugin/sayura/src/main/cpp/fcitx5-sayura"]
 	path = plugin/sayura/src/main/cpp/fcitx5-sayura
-	url = git@github.com:fcitx/fcitx5-sayura.git
+	url = https://github.com/fcitx/fcitx5-sayura
 [submodule "plugin/jyutping/src/main/cpp/libime-jyutping"]
 	path = plugin/jyutping/src/main/cpp/libime-jyutping
-	url = git@github.com:fcitx/libime-jyutping.git
+	url = https://github.com/fcitx/libime-jyutping
