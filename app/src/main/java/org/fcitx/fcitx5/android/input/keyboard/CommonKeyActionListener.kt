@@ -135,6 +135,26 @@ class CommonKeyActionListener :
                                 simulateShift()
                             }
                         }
+                        LangSwitchBehavior.ToggleRimeAscii-> {
+                            service.postFcitxJob {
+                                statusArea().firstOrNull { it.name == "fcitx-rime-im" }?.let {
+                                    it.menu?.firstOrNull()?.let {
+                                        (id) -> activateAction(id)
+                                    }
+                                }
+                            }
+                        }
+                        LangSwitchBehavior.SwitchRimeSchema -> {
+                            service.finishComposing()
+                            service.postFcitxJob {
+                                reset()
+                                statusArea().firstOrNull { it.name == "fcitx-rime-im" }?.let {
+                                    it.menu?.getOrNull(it.menu.size - 4)?.let {
+                                        (id) -> activateAction(id)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 is ShowInputMethodPickerAction -> showInputMethodPicker()
@@ -189,6 +209,24 @@ class CommonKeyActionListener :
 
                         SpaceLongPressBehavior.SimulateShiftKey -> service.postFcitxJob {
                             simulateShift()
+                        }
+                        SpaceLongPressBehavior.ToggleRimeAscii -> service.postFcitxJob {
+                            statusArea().firstOrNull {it.name == "fcitx-rime-im" }?.let {
+                                it.menu?.firstOrNull()?.let {
+                                    (id) -> activateAction(id)
+                                }
+                            }
+                        }
+                        SpaceLongPressBehavior.SwitchRimeSchema -> {
+                            service.finishComposing()
+                            service.postFcitxJob {
+                                reset()
+                                statusArea().firstOrNull { it.name == "fcitx-rime-im" }?.let {
+                                    it.menu?.getOrNull(it.menu.size - 4)?.let {
+                                        (id) -> activateAction(id)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
