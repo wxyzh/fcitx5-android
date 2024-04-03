@@ -228,6 +228,22 @@ bool AndroidFrontend::selectCandidate(int idx) {
     return activeIC_->selectCandidate(idx);
 }
 
+bool AndroidFrontend::sendHardShift() {
+    if (!activeIC_) return false;
+    // check current IME engine, currently only support pinyin
+    //auto currentIm = instance_->currentInputMethod();
+    //if (currentIm != "pinyin" && currentIm != "shuangpin") return false;
+    // Ctrl+7 to activate forget candidate mode
+    auto key1 = Key(FcitxKey_Shift_L, Flags<KeyState>(KeyState::Shift));
+    KeyEvent keyEvent(activeIC_, key1, false);
+    activeIC_->keyEvent(keyEvent);
+    auto key2 = Key(FcitxKey_Shift_L, Flags<KeyState>(KeyState::NoState));
+    keyEvent = KeyEvent(activeIC_, key2, true);
+    activeIC_->keyEvent(keyEvent);
+
+    return true;
+}
+
 bool AndroidFrontend::isInputPanelEmpty() {
     if (!activeIC_) return true;
     return activeIC_->inputPanel().empty();
