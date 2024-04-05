@@ -3,7 +3,7 @@
 	url = https://github.com/fcitx/fcitx5
 [submodule "lib/fcitx5/src/main/cpp/prebuilt"]
 	path = lib/fcitx5/src/main/cpp/prebuilt
-	url = https://github.com/wxyzh/prebuilt
+	url = https://github.com/wxyzh/f5a-prebuilt
 [submodule "lib/fcitx5-lua/src/main/cpp/fcitx5-lua"]
 	path = lib/fcitx5-lua/src/main/cpp/fcitx5-lua
 	url = https://github.com/fcitx/fcitx5-lua
