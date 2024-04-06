@@ -24,7 +24,7 @@
 	url = https://github.com/fcitx/fcitx5-unikey
 [submodule "plugin/rime/src/main/cpp/fcitx5-rime"]
 	path = plugin/rime/src/main/cpp/fcitx5-rime
-	url = https://github.com/fcitx/fcitx5-rime
+	url = https://github.com/wxyzh/fcitx5-rime
 [submodule "plugin/rime/src/main/cpp/rime-prelude"]
 	path = plugin/rime/src/main/cpp/rime-prelude
 	url = https://github.com/rime/rime-prelude
