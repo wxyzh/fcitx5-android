@@ -86,6 +86,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         withFcitxContext { sendKeySymToFcitx(sym.sym, states.toInt(), up, timestamp) }
 
     override suspend fun select(idx: Int): Boolean = withFcitxContext { selectCandidate(idx) }
+    override suspend fun forget(idx: Int): Boolean = withFcitxContext { forgetCandidate(idx) }
     override suspend fun isEmpty(): Boolean = withFcitxContext { isInputPanelEmpty() }
     override suspend fun reset() = withFcitxContext { resetInputContext() }
     override suspend fun moveCursor(position: Int) = withFcitxContext { repositionCursor(position) }
@@ -143,8 +144,8 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
     override suspend fun triggerQuickPhrase() = withFcitxContext { triggerQuickPhraseInput() }
     override suspend fun triggerUnicode() = withFcitxContext { triggerUnicodeInput() }
-    private suspend fun setClipboard(string: String) =
-        withFcitxContext { setFcitxClipboard(string) }
+    private suspend fun setClipboard(string: String, password: Boolean = false) =
+        withFcitxContext { setFcitxClipboard(string, password) }
 
     override suspend fun focus(focus: Boolean) = withFcitxContext { focusInputContext(focus) }
     override suspend fun activate(uid: Int, pkgName: String) =
@@ -238,6 +239,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         external fun selectCandidate(idx: Int): Boolean
 
         @JvmStatic
+        external fun forgetCandidate(idx: Int): Boolean
+
+        @JvmStatic
         external fun isInputPanelEmpty(): Boolean
 
         @JvmStatic
@@ -304,7 +308,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         external fun triggerUnicodeInput()
 
         @JvmStatic
-        external fun setFcitxClipboard(string: String)
+        external fun setFcitxClipboard(string: String, password: Boolean)
 
         @JvmStatic
         external fun focusInputContext(focus: Boolean)
@@ -444,7 +448,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
     @Keep
     private val onClipboardUpdate = ClipboardManager.OnClipboardUpdateListener {
-        lifecycle.lifecycleScope.launch { setClipboard(it.text) }
+        lifecycle.lifecycleScope.launch { setClipboard(it.text, it.sensitive) }
     }
 
     private fun computeAddonGraph() = runBlocking {

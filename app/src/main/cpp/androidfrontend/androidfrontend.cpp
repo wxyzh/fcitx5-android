@@ -80,7 +80,7 @@ public:
                         auto &candidate = bulk->candidateFromAll(i);
                         // maybe unnecessary; I don't see anywhere using `CandidateWord::setPlaceHolder`
                         // if (candidate.isPlaceHolder()) continue;
-                        candidates.emplace_back(filterString(candidate.text()));
+                        candidates.emplace_back(filterString(candidate.textWithComment()));
                     } catch (const std::invalid_argument &e) {
                         size = static_cast<int>(candidates.size());
                         break;
@@ -89,7 +89,7 @@ public:
             } else {
                 size = list->size();
                 for (int i = 0; i < size; i++) {
-                    candidates.emplace_back(filterString(list->candidate(i).text()));
+                    candidates.emplace_back(filterString(list->candidate(i).textWithComment()));
                 }
             }
         }
@@ -225,6 +225,28 @@ void AndroidFrontend::releaseInputContext(const int uid) {
 
 bool AndroidFrontend::selectCandidate(int idx) {
     if (!activeIC_) return false;
+    return activeIC_->selectCandidate(idx);
+}
+
+bool AndroidFrontend::forgetCandidate(int idx) {
+    if (!activeIC_) return false;
+    // check current engine, only pinyin and table engine support deleting words
+    auto *entry = instance_->inputMethodEntry(activeIC_);
+    if (entry->addon() != "pinyin" && entry->addon() != "table") return false;
+    // do we have candidate list?
+    auto list = activeIC_->inputPanel().candidateList();
+    if (!list) return false;
+    // Ctrl+7 to activate forget candidate mode
+    Key key(FcitxKey_7, Flags<KeyState>(KeyState::Ctrl));
+    KeyEvent pressEvent(activeIC_, key, false);
+    auto handled = activeIC_->keyEvent(pressEvent);
+    if (handled) {
+        KeyEvent releaseEvent(activeIC_, key, true);
+        activeIC_->keyEvent(releaseEvent);
+    } else {
+        // something went wrong
+        return false;
+    }
     return activeIC_->selectCandidate(idx);
 }
 
