@@ -51,6 +51,7 @@ public:
     void setStatusAreaUpdateCallback(const StatusAreaUpdateCallback &callback);
     void setDeleteSurroundingCallback(const DeleteSurroundingCallback &callback);
     void setToastCallback(const ToastCallback &callback);
+    bool forgetCandidate(int idx);
     bool sendHardShift();
 
 private:
@@ -75,6 +76,7 @@ private:
     FCITX_ADDON_EXPORT_FUNCTION(AndroidFrontend, setStatusAreaUpdateCallback);
     FCITX_ADDON_EXPORT_FUNCTION(AndroidFrontend, setDeleteSurroundingCallback);
     FCITX_ADDON_EXPORT_FUNCTION(AndroidFrontend, setToastCallback);
+    FCITX_ADDON_EXPORT_FUNCTION(AndroidFrontend, forgetCandidate);
     FCITX_ADDON_EXPORT_FUNCTION(AndroidFrontend, sendHardShift);
 
     Instance *instance_;
