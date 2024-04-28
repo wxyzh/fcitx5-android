@@ -118,7 +118,8 @@ class LayoutSwitchKey(
         textSize = 16f,
         textStyle = Typeface.BOLD,
         percentWidth = percentWidth,
-        variant = variant
+        variant = variant,
+        radiusAdj = true
     ),
     setOf(
         Behavior.Press(KeyAction.LayoutSwitchAction(to))
@@ -226,6 +227,7 @@ class ReturnKey(percentWidth: Float = 0.15f) : KeyDef(
         variant = Variant.Accent,
         border = Border.Special,
         viewId = R.id.button_return,
+        radiusAdj = true,
         soundEffect = InputFeedbacks.SoundEffect.Return
     ),
     setOf(

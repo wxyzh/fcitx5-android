@@ -80,8 +80,12 @@ class ThemePrefs(sharedPreferences: SharedPreferences) :
 
     val keyRadius = int(R.string.key_radius, "key_radius", 4, 0, 48, "dp")
 
-    val textEditingButtonRadius =
-        int(R.string.text_editing_button_radius, "text_editing_button_radius", 8, 0, 48, "dp")
+    val bottomCornerRadiusAdjust =
+        int(R.string.bottom_corner_radius_adjust, "bottom_corner_radius_adjust", 20, 0, 48, "dp")
+
+    enum class PunctuationPosition {
+        Bottom,
+        TopRight;
 
     val clipboardEntryRadius =
         int(R.string.clipboard_entry_radius, "clipboard_entry_radius", 2, 0, 48, "dp")

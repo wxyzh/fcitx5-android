@@ -62,6 +62,13 @@ abstract class KeyView(ctx: Context, val theme: Theme, val def: KeyDef.Appearanc
 
     init {
         val prefs = ThemeManager.prefs
+        var calcRadius = prefs.keyRadius.getValue()
+        if (def.radiusAdj) {
+            calcRadius = calcRadius + prefs.bottomCornerRadiusAdjust.getValue()
+        }
+        if (calcRadius > 48) {
+            calcRadius = 48
+        }
         bordered = prefs.keyBorder.getValue()
         rippled = prefs.keyRippleEffect.getValue()
         radius = dp(prefs.keyRadius.getValue().toFloat())
