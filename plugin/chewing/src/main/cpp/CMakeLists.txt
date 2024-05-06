@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(fcitx5-android-plugin-chewing VERSION 0.0.8)
+project(fcitx5-android-plugin-chewing VERSION 0.0.9)
 
 # For reproducible build
 add_link_options("LINKER:--hash-style=gnu,--build-id=none")
@@ -23,4 +23,5 @@ set_target_properties(Chewing_static PROPERTIES
         )
 
 set(CHEWING_TARGET Chewing_static)
+option(ENABLE_TEST "" OFF)
 add_subdirectory(fcitx5-chewing)
