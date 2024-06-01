@@ -52,7 +52,6 @@ interface FcitxAPI {
     suspend fun sendKey(sym: KeySym, states: KeyStates, up: Boolean = false, timestamp: Int = -1)
 
     suspend fun select(idx: Int): Boolean
-    suspend fun forget(idx: Int): Boolean
     suspend fun simulateShift(): Boolean
     suspend fun isEmpty(): Boolean
     suspend fun reset()
@@ -101,5 +100,8 @@ interface FcitxAPI {
     suspend fun activateAction(id: Int)
 
     suspend fun getCandidates(offset: Int, limit: Int): Array<String>
+
+    suspend fun getCandidateActions(idx: Int): Array<CandidateAction>
+    suspend fun triggerCandidateAction(idx: Int, actionIdx: Int)
 
 }
