@@ -46,10 +46,21 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
 
     inner class Keyboard : ManagedPreferenceCategory(R.string.keyboard, sharedPreferences) {
         val hapticOnKeyPress =
-            enumList(
+            list(
                 R.string.button_haptic_feedback,
                 "haptic_on_keypress",
-                InputFeedbackMode.FollowingSystem
+                InputFeedbackMode.FollowingSystem,
+                InputFeedbackMode,
+                listOf(
+                    InputFeedbackMode.FollowingSystem,
+                    InputFeedbackMode.Enabled,
+                    InputFeedbackMode.Disabled
+                ),
+                listOf(
+                    R.string.following_system_settings,
+                    R.string.enabled,
+                    R.string.disabled
+                )
             )
         val hapticOnKeyUp = switch(
             R.string.button_up_haptic_feedback,
@@ -102,10 +113,21 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             buttonLongPressVibrationAmplitude = secondary
         }
 
-        val soundOnKeyPress = enumList(
+        val soundOnKeyPress = list(
             R.string.button_sound,
             "sound_on_keypress",
-            InputFeedbackMode.FollowingSystem
+            InputFeedbackMode.FollowingSystem,
+            InputFeedbackMode,
+            listOf(
+                InputFeedbackMode.FollowingSystem,
+                InputFeedbackMode.Enabled,
+                InputFeedbackMode.Disabled
+            ),
+            listOf(
+                R.string.following_system_settings,
+                R.string.enabled,
+                R.string.disabled
+            )
         )
         val soundOnKeyPressVolume = int(
             R.string.button_sound_volume,
@@ -135,10 +157,21 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             switch(R.string.show_voice_input_button, "show_voice_input_button", false)
         val expandKeypressArea =
             switch(R.string.expand_keypress_area, "expand_keypress_area", false)
-        val swipeSymbolDirection = enumList(
+        val swipeSymbolDirection = list(
             R.string.swipe_symbol_behavior,
             "swipe_symbol_behavior",
-            SwipeSymbolDirection.Down
+            SwipeSymbolDirection.Down,
+            SwipeSymbolDirection,
+            listOf(
+                SwipeSymbolDirection.Up,
+                SwipeSymbolDirection.Down,
+                SwipeSymbolDirection.Disabled
+            ),
+            listOf(
+                R.string.swipe_up,
+                R.string.swipe_down,
+                R.string.disabled
+            )
         )
         val longPressDelay = int(
             R.string.keyboard_long_press_delay,
@@ -149,7 +182,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             "ms",
             10
         )
-        val spaceKeyLongPressBehavior = enumList(
+        val spaceKeyLongPressBehavior = list(
             R.string.space_long_press_behavior,
             "space_long_press_behavior",
             SpaceLongPressBehavior.None,
@@ -172,13 +205,12 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
                 R.string.space_behavior_toggle_ascii,
                 R.string.space_behavior_switch_schema
             )
-            SpaceLongPressBehavior.None
         )
         val spaceSwipeMoveCursor =
             switch(R.string.space_swipe_move_cursor, "space_swipe_move_cursor", true)
         val showLangSwitchKey =
             switch(R.string.show_lang_switch_key, "show_lang_switch_key", true)
-        val langSwitchKeyBehavior = enumList(
+        val langSwitchKeyBehavior = list(
             R.string.lang_switch_key_behavior,
             "lang_switch_key_behavior",
             LangSwitchBehavior.Enumerate,
@@ -199,7 +231,6 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
                 R.string.lang_switch_behavior_toggle_ascii,
                 R.string.lang_switch_behavior_switch_schema
             )
-            LangSwitchBehavior.Enumerate
         ) { showLangSwitchKey.getValue() }
 
         val keyboardHeightPercent: ManagedPreference.PInt
@@ -262,15 +293,35 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             keyboardBottomPaddingLandscape = secondary
         }
 
-        val horizontalCandidateStyle = enumList(
+        val horizontalCandidateStyle = list(
             R.string.horizontal_candidate_style,
             "horizontal_candidate_style",
-            HorizontalCandidateMode.AutoFillWidth
+            HorizontalCandidateMode.AutoFillWidth,
+            HorizontalCandidateMode,
+            listOf(
+                HorizontalCandidateMode.NeverFillWidth,
+                HorizontalCandidateMode.AutoFillWidth,
+                HorizontalCandidateMode.AlwaysFillWidth,
+            ),
+            listOf(
+                R.string.horizontal_candidate_never_fill,
+                R.string.horizontal_candidate_auto_fill,
+                R.string.horizontal_candidate_always_fill
+            )
         )
-        val expandedCandidateStyle = enumList(
+        val expandedCandidateStyle = list(
             R.string.expanded_candidate_style,
             "expanded_candidate_style",
-            ExpandedCandidateStyle.Grid
+            ExpandedCandidateStyle.Grid,
+            ExpandedCandidateStyle,
+            listOf(
+                ExpandedCandidateStyle.Grid,
+                ExpandedCandidateStyle.Flexbox
+            ),
+            listOf(
+                R.string.expanded_candidate_style_grid,
+                R.string.expanded_candidate_style_flexbox
+            )
         )
 
         val expandedCandidateGridSpanCount: ManagedPreference.PInt

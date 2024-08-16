@@ -4,10 +4,13 @@
  */
 package org.fcitx.fcitx5.android.input.candidates.expanded
 
-import org.fcitx.fcitx5.android.R
-import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceEnum
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 
-enum class ExpandedCandidateStyle(override val stringRes: Int) : ManagedPreferenceEnum {
-    Grid(R.string.expanded_candidate_style_grid),
-    Flexbox(R.string.expanded_candidate_style_flexbox);
+enum class ExpandedCandidateStyle {
+    Grid,
+    Flexbox;
+
+    companion object : ManagedPreference.StringLikeCodec<ExpandedCandidateStyle> {
+        override fun decode(raw: String): ExpandedCandidateStyle = valueOf(raw)
+    }
 }

@@ -4,21 +4,18 @@
  */
 package org.fcitx.fcitx5.android.input.keyboard
 
-import org.fcitx.fcitx5.android.R
-import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceEnum
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 
-enum class SpaceLongPressBehavior(override val stringRes: Int) : ManagedPreferenceEnum {
-    None(R.string.space_behavior_none),
-    Enumerate(R.string.space_behavior_enumerate),
-    ToggleActivate(R.string.space_behavior_activate),
-    ShowPicker(R.string.space_behavior_picker),
-    SimulateShiftKey(R.string.space_behavior_simulate_shift),
-    ToggleRimeAscii(R.string.space_SimulateShiftKey),
-    SwitchRimeSchema(R.string.lang_switch_behavior_switch_schema);
+enum class SpaceLongPressBehavior {
+    None,
+    Enumerate,
+    ToggleActivate,
+    ShowPicker,
+    SimulateShiftKey,
+    ToggleRimeAscii,
+    SwitchRimeSchema;
 
-
-
-
-
-
+    companion object : ManagedPreference.StringLikeCodec<SpaceLongPressBehavior> {
+        override fun decode(raw: String): SpaceLongPressBehavior = valueOf(raw)
+    }
 }
