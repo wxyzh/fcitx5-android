@@ -9,10 +9,9 @@ jobs:
   develop:
     strategy:
       matrix:
-        #  Nix doesn't support Android toolchain on aarch64-darwin yet
-        # https://github.com/NixOS/nixpkgs/issues/303968
-#        os: [ubuntu-latest, macOS-latest]
-        os: [ubuntu-latest]
+        os:
+          - ubuntu-22.04
+          - macos-14
     runs-on: ${{ matrix.os }}
     steps:
       - name: Fetch source code
@@ -27,7 +26,7 @@ jobs:
         with:
           name: fcitx5-android
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - name: Build Debug APK
+      - name: Build Release APK
         run: |
-          nix develop .#noAS --command ./gradlew :app:assembleDebug
-          nix develop .#noAS --command ./gradlew :assembleDebugPlugins
+          nix develop .#noAS --command ./gradlew :app:assembleRelease
+          nix develop .#noAS --command ./gradlew :assembleReleasePlugins

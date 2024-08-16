@@ -10,8 +10,9 @@ import android.os.VibrationEffect
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
+import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
-import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceEnum
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.audioManager
 import org.fcitx.fcitx5.android.utils.getSystemSettings
@@ -19,12 +20,10 @@ import org.fcitx.fcitx5.android.utils.vibrator
 
 object InputFeedbacks {
 
-    enum class InputFeedbackMode {
-        Enabled, Disabled, FollowingSystem;
-
-        companion object : ManagedPreference.StringLikeCodec<InputFeedbackMode> {
-            override fun decode(raw: String) = InputFeedbackMode.valueOf(raw)
-        }
+    enum class InputFeedbackMode(override val stringRes: Int) : ManagedPreferenceEnum {
+        FollowingSystem(R.string.following_system_settings),
+        Enabled(R.string.enabled),
+        Disabled(R.string.disabled);
     }
 
     private var systemSoundEffects = false
@@ -41,6 +40,7 @@ object InputFeedbacks {
     private val soundOnKeyPress by AppPrefs.getInstance().keyboard.soundOnKeyPress
     private val soundOnKeyPressVolume by AppPrefs.getInstance().keyboard.soundOnKeyPressVolume
     private val hapticOnKeyPress by AppPrefs.getInstance().keyboard.hapticOnKeyPress
+    private val hapticOnKeyUp by AppPrefs.getInstance().keyboard.hapticOnKeyUp
     private val buttonPressVibrationMilliseconds by AppPrefs.getInstance().keyboard.buttonPressVibrationMilliseconds
     private val buttonLongPressVibrationMilliseconds by AppPrefs.getInstance().keyboard.buttonLongPressVibrationMilliseconds
     private val buttonPressVibrationAmplitude by AppPrefs.getInstance().keyboard.buttonPressVibrationAmplitude
@@ -53,13 +53,13 @@ object InputFeedbacks {
 
     private val audioManager = appContext.audioManager
 
-    fun hapticFeedback(view: View, longPress: Boolean = false) {
+    fun hapticFeedback(view: View, longPress: Boolean = false, keyUp: Boolean = false) {
         when (hapticOnKeyPress) {
             InputFeedbackMode.Enabled -> {}
             InputFeedbackMode.Disabled -> return
             InputFeedbackMode.FollowingSystem -> if (!systemHapticFeedback) return
         }
-
+        if (keyUp && !hapticOnKeyUp) return
         val duration: Long
         val amplitude: Int
         val hfc: Int
