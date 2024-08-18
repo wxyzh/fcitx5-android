@@ -28,7 +28,7 @@ import splitties.views.dsl.core.textView
 import splitties.views.dsl.core.verticalLayout
 import splitties.views.horizontalPadding
 
-class PreeditUi(override val ctx: Context, private val theme: Theme) : Ui {
+open class PreeditUi(override val ctx: Context, private val theme: Theme) : Ui {
 
     class CursorSpan(ctx: Context, @ColorInt color: Int, metrics: Paint.FontMetricsInt) :
         DynamicDrawableSpan() {
@@ -46,21 +46,21 @@ class PreeditUi(override val ctx: Context, private val theme: Theme) : Ui {
 
     private val keyBorder by ThemeManager.prefs.keyBorder
 
-    private val barBackground = when (theme) {
+    open val bkgColor = when (theme) {
         is Theme.Builtin -> if (keyBorder) theme.backgroundColor else theme.barColor
         is Theme.Custom -> theme.backgroundColor
     }
 
     private fun createTextView() = textView {
-         //backgroundColor = barBackground
+        //backgroundColor = barBackground
         val barRadius = dp(ThemeManager.prefs.keyRadius.getValue().toFloat())
         background = GradientDrawable().apply {
-             setColor(barBackground)
+             setColor(bkgColor)
              cornerRadii = floatArrayOf(
-                 barRadius, barRadius, // å·¦ä¸Šè§’
-                 barRadius, barRadius, // å³ä¸Šè§’
-                 barRadius, barRadius, // å³ä¸‹è§’
-                 barRadius, barRadius  // å·¦ä¸‹è§’
+                 barRadius, barRadius, // ×óÉÏ½Ç
+                 barRadius, barRadius, // ÓÒÉÏ½Ç
+                 barRadius, barRadius, // ÓÒÏÂ½Ç
+                 barRadius, barRadius  // ×óÏÂ½Ç
              )
         }
         horizontalPadding = dp(8)
