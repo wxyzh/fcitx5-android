@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-22.04
+          - ubuntu-24.04
           #- macos-13
           #- windows-2022
         abi:
@@ -29,8 +29,8 @@ jobs:
       - name: Regenerate symlinks pointing to submodule (Windows)
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
-          Remove-Item -Recurse app/src/main/assets/usr/share
-          git checkout -- *
+          Remove-Item -Recurse app/src/main/assets/usr/share, plugin/hangul/src/main/assets/usr/share/libhangul, plugin/chewing/src/main/assets/usr/share/libchewing, plugin/jyutping/src/main/assets/usr/share/libime
+          git checkout -- .
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -46,10 +46,18 @@ jobs:
           sdkmanager --install "cmake;3.22.1"
 
       - name: Install system dependencies (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |
           sudo apt update
           sudo apt install extra-cmake-modules gettext
+          #删除不需要的插件
+          rm plugin/anthy -rf
+          rm plugin/chewing -rf
+          rm plugin/hangul -rf
+          rm plugin/jyutping -rf
+          rm plugin/sayura -rf
+          rm plugin/thai -rf
+          rm plugin/unikey -rf
 
       - name: Install system dependencies (macOS)
         if: ${{ matrix.os == 'macos-13' }}
@@ -63,7 +71,7 @@ jobs:
           Add-Content $env:GITHUB_PATH "C:/msys64/ucrt64/bin"
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Build release APK
         run: |
