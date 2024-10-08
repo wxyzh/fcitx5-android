@@ -52,7 +52,7 @@ jobs:
           sudo apt install extra-cmake-modules gettext
           #删除不需要的插件
           rm plugin/anthy -rf
-          rm plugin/chewing -rf
+          # rm plugin/chewing -rf
           rm plugin/hangul -rf
           rm plugin/jyutping -rf
           rm plugin/sayura -rf
@@ -79,7 +79,7 @@ jobs:
           ./gradlew :assembleReleasePlugins
 
       - name: Sign app
-        uses: kevin-david/zipalign-sign-android-release@v1.1.1
+        uses: kevin-david/zipalign-sign-android-release@v2.0.1
         #uses: rpavlik/sign-android-release@master
         id: sign_app
         with:
@@ -90,7 +90,7 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
           zipAlign: true
         env:
-          BUILD_TOOLS_VERSION: "33.0.2"
+          BUILD_TOOLS_VERSION: "34.0.0"
           
 
       - name: Upload app
@@ -125,7 +125,7 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
           zipAlign: true
         env:
-          BUILD_TOOLS_VERSION: "33.0.2" 
+          BUILD_TOOLS_VERSION: "34.0.0" 
           
       - name: Upload plugins
         uses: actions/upload-artifact@v4
