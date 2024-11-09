@@ -19,15 +19,24 @@ class InputDeviceManager {
     private var inputView: InputView? = null
     private var candidatesView: CandidatesView? = null
 
-    private fun setupViewEvents(isVirtual: Boolean) {
+    private fun setupInputViewEvents(isVirtual: Boolean) {
         inputView?.handleEvents = isVirtual
         inputView?.visibility = if (isVirtual) View.VISIBLE else View.GONE
+        candidatesView?.handleEvents = true
+    }
+
+    private fun setupCandidatesViewEvents(isVirtual: Boolean) {
         candidatesView?.handleEvents = !isVirtual
         // hide CandidatesView when entering virtual keyboard mode,
         // but preserve the visibility when entering physical keyboard mode (in case it's empty)
-        if (isVirtual) {
+        /* if (isVirtual) {
             candidatesView?.visibility = View.GONE
-        }
+        } */
+    }
+
+    private fun setupViewEvents(isVirtual: Boolean) {
+        setupInputViewEvents(isVirtual)
+        setupCandidatesViewEvents(false)
     }
 
     var isVirtualKeyboard = true
@@ -36,18 +45,24 @@ class InputDeviceManager {
             setupViewEvents(value)
         }
 
-    fun setViews(inputView: InputView, candidatesView: CandidatesView) {
+    fun setInputView(inputView: InputView) {
         this.inputView = inputView
+        setupInputViewEvents(this.isVirtualKeyboard)
+    }
+
+    fun setCandidatesView(candidatesView: CandidatesView) {
         this.candidatesView = candidatesView
-        setupViewEvents(this.isVirtualKeyboard)
+        setupCandidatesViewEvents(this.isVirtualKeyboard)
     }
 
     private fun applyMode(service: FcitxInputMethodService, useVirtualKeyboard: Boolean) {
-        if (useVirtualKeyboard == isVirtualKeyboard) {
+        /*if (useVirtualKeyboard == isVirtualKeyboard) {
             return
-        }
+        }*/
         // monitor CursorAnchorInfo when switching to CandidatesView
-        service.currentInputConnection.monitorCursorAnchor(!useVirtualKeyboard)
+        /* updates: always call monitorCursorAnchor, no need call it here
+         * service.currentInputConnection.monitorCursorAnchor(/* !useVirtualKeyboard */)
+         */
         service.postFcitxJob {
             setCandidatePagingMode(if (useVirtualKeyboard) 0 else 1)
         }
@@ -107,6 +122,7 @@ class InputDeviceManager {
     }
 
     fun evaluateOnViewClicked(service: FcitxInputMethodService) {
+        if (!startedInputView) return
         val useVirtualKeyboard = when (candidatesViewMode) {
             FloatingCandidatesMode.SystemDefault -> service.superEvaluateInputViewShown()
             else -> true
@@ -115,11 +131,11 @@ class InputDeviceManager {
     }
 
     fun evaluateOnUpdateEditorToolType(toolType: Int, service: FcitxInputMethodService) {
+        if (!startedInputView) return
         val useVirtualKeyboard = when (candidatesViewMode) {
             FloatingCandidatesMode.SystemDefault -> service.superEvaluateInputViewShown()
             FloatingCandidatesMode.InputDevice ->
-                // switch to virtual keyboard on touch screen events, otherwise preserve current mode
-                if (toolType == MotionEvent.TOOL_TYPE_FINGER) true else isVirtualKeyboard
+                toolType == MotionEvent.TOOL_TYPE_FINGER || toolType == MotionEvent.TOOL_TYPE_STYLUS
             FloatingCandidatesMode.Disabled -> true
         }
         applyMode(service, useVirtualKeyboard)
