@@ -38,7 +38,8 @@ import androidx.autofill.inline.common.ImageViewStyle
 import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
-import androidx.core.view.WindowCompat
+import androidx.core.view.OnApplyWindowInsetsListener
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
@@ -54,7 +55,6 @@ import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.core.FormattedText
 import org.fcitx.fcitx5.android.core.KeyStates
 import org.fcitx.fcitx5.android.core.KeySym
-import org.fcitx.fcitx5.android.core.ScancodeMapping
 import org.fcitx.fcitx5.android.core.SubtypeManager
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
@@ -64,7 +64,6 @@ import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceProvider
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
-import org.fcitx.fcitx5.android.data.theme.ThemePrefs.NavbarBackground
 import org.fcitx.fcitx5.android.input.cursor.CursorRange
 import org.fcitx.fcitx5.android.input.cursor.CursorTracker
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
@@ -96,7 +95,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private var inputView: InputView? = null
     private var candidatesView: CandidatesView? = null
 
-    private val inputDeviceMgr = InputDeviceManager()
+    private val navbarMgr = NavigationBarManager()
+    private val inputDeviceMgr = InputDeviceManager onChange@{
+        val w = window.window ?: return@onChange
+        navbarMgr.evaluate(w, useVirtualKeyboard = it)
+    }
 
     private var capabilityFlags = CapabilityFlags.DefaultFlags
 
@@ -121,72 +124,36 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     private val inlineSuggestions by AppPrefs.getInstance().keyboard.inlineSuggestions
 
-    private val keyBorder by ThemeManager.prefs.keyBorder
-    private val navbarBackground by ThemeManager.prefs.navbarBackground
-
-    private var shouldUpdateNavbarForeground = false
-    private var shouldUpdateNavbarBackground = false
-
-    private fun evaluateNavbarUpdates() {
-        val w = window.window!!
-        when (navbarBackground) {
-            NavbarBackground.None -> {
-                shouldUpdateNavbarForeground = false
-                shouldUpdateNavbarBackground = false
-                WindowCompat.setDecorFitsSystemWindows(w, true)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    w.isNavigationBarContrastEnforced = true
-                }
-            }
-            NavbarBackground.ColorOnly -> {
-                shouldUpdateNavbarForeground = true
-                shouldUpdateNavbarBackground = true
-                WindowCompat.setDecorFitsSystemWindows(w, true)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    w.isNavigationBarContrastEnforced = false
-                }
-            }
-            NavbarBackground.Full -> {
-                shouldUpdateNavbarForeground = true
-                shouldUpdateNavbarBackground = false
-                WindowCompat.setDecorFitsSystemWindows(w, false)
-                /**
-                 * Why on earth does it deprecated? It says
-                 * https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r3/core/java/android/view/Window.java#2720
-                 * "If the app targets VANILLA_ICE_CREAM or above, the color will be transparent and cannot be changed"
-                 * but actually not.
-                 */
-                @Suppress("DEPRECATION")
-                w.navigationBarColor = Color.TRANSPARENT
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    // don't apply scrim to transparent navigation bar
-                    w.isNavigationBarContrastEnforced = false
-                }
-            }
-        }
+    private val inputViewInsetsListener = OnApplyWindowInsetsListener { view, insets ->
+        (view as BaseInputView).onApplyWindowInsets(insets)
+        WindowInsetsCompat.CONSUMED
     }
 
     private fun replaceInputView(theme: Theme): InputView {
+        inputView?.also { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
         val newInputView = InputView(this, fcitx, theme)
         setInputView(newInputView)
         inputDeviceMgr.setInputView(newInputView)
+        ViewCompat.setOnApplyWindowInsetsListener(newInputView, inputViewInsetsListener)
         inputView = newInputView
         return newInputView
     }
 
     private fun replaceCandidateView(theme: Theme): CandidatesView {
+        candidatesView?.also { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
         val newCandidatesView = CandidatesView(this, fcitx, theme)
         // replace CandidatesView manually
         contentView.removeView(candidatesView)
         // put CandidatesView directly under content view
         contentView.addView(newCandidatesView)
         inputDeviceMgr.setCandidatesView(newCandidatesView)
+        ViewCompat.setOnApplyWindowInsetsListener(newCandidatesView, inputViewInsetsListener)
         candidatesView = newCandidatesView
         return newCandidatesView
     }
 
     private fun replaceInputViews(theme: Theme) {
-        evaluateNavbarUpdates()
+        navbarMgr.evaluate(window.window!!)
         replaceInputView(theme)
         replaceCandidateView(theme)
     }
@@ -416,7 +383,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 0,
                 metaState,
                 KeyCharacterMap.VIRTUAL_KEYBOARD,
-                ScancodeMapping.keyCodeToScancode(keyEventCode),
+                0,
                 KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE
             )
         )
@@ -432,7 +399,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 0,
                 metaState,
                 KeyCharacterMap.VIRTUAL_KEYBOARD,
-                ScancodeMapping.keyCodeToScancode(keyEventCode),
+                0,
                 KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE
             )
         )
@@ -498,20 +465,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             Timber.w("Device does not support android.R.attr.colorAccent which it should have.")
         }
         InputFeedbacks.syncSystemPrefs()
-        val w = window.window!!
-        val theme = ThemeManager.activeTheme
         // navbar foreground/background color would reset every time window shows
-        if (shouldUpdateNavbarForeground) {
-            WindowCompat.getInsetsController(w, decorView)
-                .isAppearanceLightNavigationBars = !theme.isDark
-        }
-        if (shouldUpdateNavbarBackground) {
-            @Suppress("DEPRECATION")
-            w.navigationBarColor = when (theme) {
-                is Theme.Builtin -> if (keyBorder) theme.backgroundColor else theme.keyboardColor
-                is Theme.Custom -> theme.backgroundColor
-            }
-        }
+        navbarMgr.update(window.window!!)
     }
 
     override fun onCreateInputView(): View? {
@@ -542,6 +497,28 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
+    private fun setCandidateViewDefaultPosition() {
+        val useVirtualKeyboard = super.onEvaluateInputViewShown()
+        val gapValue = 20f
+        if (useVirtualKeyboard) {
+            inputView?.keyboardView?.getLocationInWindow(inputViewLocation)
+            anchorPosition[0] = inputViewLocation[0].toFloat() + gapValue
+            anchorPosition[1] = inputViewLocation[1].toFloat() - gapValue
+            anchorPosition[2] = inputViewLocation[0].toFloat() + gapValue
+            anchorPosition[3] = inputViewLocation[1].toFloat() - gapValue
+            if (inputViewLocation[1] > 0) {
+                contentSize[1] = inputViewLocation[1].toFloat() - gapValue
+            }
+        } else {
+            anchorPosition[0] = 0f + gapValue
+            anchorPosition[1] = contentSize[1] - gapValue
+            anchorPosition[2] = 0f + gapValue
+            anchorPosition[3] = contentSize[1] - gapValue
+        }
+        //contentSize[0] = contentSize[0] + gapValue
+        candidatesView?.updateCursorAnchor(anchorPosition, contentSize)
+    }
+
     private var inputViewLocation = intArrayOf(0, 0)
 
     override fun onComputeInsets(outInsets: Insets) {
@@ -553,13 +530,16 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
             }
         } else {
-            val h = decorView.height
+            val n = decorView.findViewById<View>(android.R.id.navigationBarBackground)?.height ?: 0
+            val h = decorView.height - n
             outInsets.apply {
                 contentTopInsets = h
                 visibleTopInsets = h
                 touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
             }
-            return
+            if (!super.onEvaluateInputViewShown()) {
+                return
+            }
         }
         inputView?.keyboardView?.getLocationInWindow(inputViewLocation)
         outInsets.apply {
@@ -721,12 +701,15 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             // because onStartInputView will always be called after onStartInput,
             // editorInfo and capFlags should be up-to-date
             inputView?.startInput(info, capabilityFlags, restarting)
-        } else {
+        } /* else {
             // monitor cursor anchor only when needed, ie
             // InputView just becomes visible && using floating CandidatesView
             if (!restarting) {
                 currentInputConnection?.monitorCursorAnchor()
             }
+        } */
+        if (!restarting) {
+            currentInputConnection?.monitorCursorAnchor()
         }
     }
 
@@ -751,11 +734,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private var decorLocationUpdated = false
 
     private fun updateDecorLocation() {
-        val navbarInsets = WindowInsetsCompat.toWindowInsetsCompat(decorView.rootWindowInsets)
-            .getInsets(WindowInsetsCompat.Type.navigationBars())
         contentSize[0] = contentView.width.toFloat()
-        // dodge navbar when navbarBackground == NavbarBackground.Full
-        contentSize[1] = contentView.height.toFloat() - navbarInsets.bottom.toFloat()
+        contentSize[1] = contentView.height.toFloat()
         decorView.getLocationOnScreen(decorLocationInt)
         decorLocation[0] = decorLocationInt[0].toFloat()
         decorLocation[1] = decorLocationInt[1].toFloat()
@@ -785,11 +765,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             updateDecorLocation()
         }
         if (anchorPosition.any(Float::isNaN)) {
-            anchorPosition[0] = 0f
-            anchorPosition[1] = contentSize[1]
-            anchorPosition[2] = 0f
-            anchorPosition[3] = contentSize[1]
-            candidatesView?.updateCursorAnchor(anchorPosition, contentSize)
+            setCandidateViewDefaultPosition()
             return
         }
         // params of `Matrix.mapPoints` must be [x0, y0, x1, y1]
@@ -799,6 +775,21 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         anchorPosition[1] -= yOffset
         anchorPosition[2] -= xOffset
         anchorPosition[3] -= yOffset
+        if (super.onEvaluateInputViewShown()) {
+            inputView?.keyboardView?.getLocationInWindow(inputViewLocation)
+            if (inputViewLocation[1] > 0) {
+                contentSize[1] = inputViewLocation[1].toFloat()
+                if (anchorPosition[1] > contentSize[1]) { //when in chatgpt online web 
+                    val gapValue = 20f
+                    anchorPosition[0] = inputViewLocation[0].toFloat() + gapValue
+                    anchorPosition[1] = inputViewLocation[1].toFloat() - gapValue
+                    anchorPosition[2] = inputViewLocation[0].toFloat() + gapValue
+                    anchorPosition[3] = inputViewLocation[1].toFloat() - gapValue
+                    contentSize[1] = inputViewLocation[1].toFloat() - gapValue
+                    //contentSize[0] = contentSize[0] + gapValue
+                }
+            }
+        }
         candidatesView?.updateCursorAnchor(anchorPosition, contentSize)
     }
 
@@ -1016,6 +1007,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onDestroy() {
+        inputView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
+        candidatesView?.let { ViewCompat.setOnApplyWindowInsetsListener(it, null) }
         AppPrefs.getInstance().apply {
             keyboard.expandKeypressArea.unregisterOnChangeListener(recreateInputViewListener)
             candidates.unregisterOnChangeListener(recreateCandidatesViewListener)
@@ -1052,5 +1045,4 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     companion object {
         const val DeleteSurroundingFlag = "org.fcitx.fcitx5.android.DELETE_SURROUNDING"
     }
-
 }
