@@ -1,15 +1,15 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.logging.LogLevel
 import org.gradle.api.tasks.Delete
-import org.gradle.configurationcache.extensions.capitalized
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.getByName
 import org.gradle.kotlin.dsl.task
+import java.io.File
 import kotlin.io.path.isSymbolicLink
 
 /**
@@ -20,6 +20,7 @@ class FcitxComponentPlugin : Plugin<Project> {
     abstract class FcitxComponentExtension {
         var installLibraries: List<String> = emptyList()
         var excludeFiles: List<String> = emptyList()
+        var modifyFiles: Map<String, (File) -> Unit> = emptyMap()
     }
 
     companion object {
@@ -31,6 +32,8 @@ class FcitxComponentPlugin : Plugin<Project> {
     }
 
     override fun apply(target: Project) {
+        val installTask = target.task(INSTALL_TASK)
+        val deleteTask = target.task(DELETE_TASK)
         registerCMakeTask(target, "generate-desktop-file", "config")
         registerCMakeTask(target, "translation-file", "translation")
         registerCleanTask(target)
@@ -43,8 +46,8 @@ class FcitxComponentPlugin : Plugin<Project> {
                 registerCMakeTask(target, "translation-file", "translation", project)
             }
             if (ext.excludeFiles.isNotEmpty()) {
-                target.task(DELETE_TASK) {
-                    dependsOn(target.tasks.findByName(INSTALL_TASK))
+                deleteTask.apply {
+                    dependsOn(installTask)
                     doLast {
                         ext.excludeFiles.forEach {
                             project.assetsDir.resolve(it).delete()
@@ -81,10 +84,16 @@ class FcitxComponentPlugin : Plugin<Project> {
                     environment("DESTDIR", project.assetsDir.absolutePath)
                     commandLine(cmake, "--install", ".", "--component", component)
                 }
+                val ext = project.extensions.getByName<FcitxComponentExtension>("fcitxComponent")
+                ext.modifyFiles.forEach { (path, function) ->
+                    val file = project.assetsDir.resolve(path)
+                    if (file.exists()) {
+                        function.invoke(file)
+                    }
+                }
             }
         }
-        val dependencyTask = project.tasks.findByName(INSTALL_TASK) ?: project.task(INSTALL_TASK)
-        dependencyTask.dependsOn(task)
+        project.tasks.getByName(INSTALL_TASK).dependsOn(task)
     }
 
     private fun registerCleanTask(project: Project) {

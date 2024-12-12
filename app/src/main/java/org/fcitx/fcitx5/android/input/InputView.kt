@@ -1,46 +1,37 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
+
 package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
-import android.app.Dialog
 import android.content.res.Configuration
-import android.graphics.Color
 import android.os.Build
 import android.view.View
 import android.view.View.OnClickListener
-import android.view.WindowManager
+import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsResponse
 import android.widget.ImageView
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
-import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.CapabilityFlags
 import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
-import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceProvider
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
-import org.fcitx.fcitx5.android.data.theme.ThemePrefs.NavbarBackground
 import org.fcitx.fcitx5.android.input.bar.KawaiiBarComponent
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcaster
 import org.fcitx.fcitx5.android.input.broadcast.PreeditEmptyStateComponent
 import org.fcitx.fcitx5.android.input.broadcast.PunctuationComponent
 import org.fcitx.fcitx5.android.input.broadcast.ReturnKeyDrawableComponent
-import org.fcitx.fcitx5.android.input.candidates.HorizontalCandidateComponent
+import org.fcitx.fcitx5.android.input.candidates.horizontal.HorizontalCandidateComponent
 import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener
 import org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
 import org.fcitx.fcitx5.android.input.picker.emojiPicker
@@ -49,7 +40,6 @@ import org.fcitx.fcitx5.android.input.picker.symbolPicker
 import org.fcitx.fcitx5.android.input.popup.PopupComponent
 import org.fcitx.fcitx5.android.input.preedit.PreeditComponent
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
-import org.fcitx.fcitx5.android.utils.styledFloat
 import org.fcitx.fcitx5.android.utils.unset
 import org.mechdancer.dependency.DynamicScope
 import org.mechdancer.dependency.manager.wrapToUniqueComponent
@@ -77,16 +67,12 @@ import splitties.views.imageDrawable
 
 @SuppressLint("ViewConstructor")
 class InputView(
-    val service: FcitxInputMethodService,
-    val fcitx: FcitxConnection,
-    val theme: Theme
-) : ConstraintLayout(service) {
-
-    private var shouldUpdateNavbarForeground = false
-    private var shouldUpdateNavbarBackground = false
+    service: FcitxInputMethodService,
+    fcitx: FcitxConnection,
+    theme: Theme
+) : BaseInputView(service, fcitx, theme) {
 
     private val keyBorder by ThemeManager.prefs.keyBorder
-    private val navbarBackground by ThemeManager.prefs.navbarBackground
 
     private val customBackground = imageView {
         scaleType = ImageView.ScaleType.CENTER_CROP
@@ -106,8 +92,6 @@ class InputView(
         // bottomMargin as WindowInsets (Navigation Bar) offset
         setOnClickListener(placeholderOnClickListener)
     }
-
-    private val eventHandlerJob: Job
 
     private val scope = DynamicScope()
     private val themedContext = context.withTheme(R.style.Theme_InputViewTheme)
@@ -193,8 +177,10 @@ class InputView(
         }
 
     @Keep
-    private val onKeyboardSizeChangeListener = ManagedPreference.OnChangeListener<Int> { _, _ ->
-        updateKeyboardSize()
+    private val onKeyboardSizeChangeListener = ManagedPreferenceProvider.OnChangeListener { key ->
+        if (keyboardSizePrefs.any { it.key == key }) {
+            updateKeyboardSize()
+        }
     }
 
     val keyboardView: View
@@ -203,19 +189,9 @@ class InputView(
         // MUST call before any operation
         setupScope()
 
-        eventHandlerJob = service.lifecycleScope.launch {
-            fcitx.runImmediately { eventFlow }.collect {
-                handleFcitxEvent(it)
-            }
-        }
-
         // restore punctuation mapping in case of InputView recreation
         fcitx.launchOnReady {
             punctuation.updatePunctuationMapping(it.statusAreaActionsCached)
-        }
-
-        keyboardSizePrefs.forEach {
-            it.registerOnChangeListener(onKeyboardSizeChangeListener)
         }
 
         // make sure KeyboardWindow's view has been created before it receives any broadcast
@@ -223,46 +199,10 @@ class InputView(
         windowManager.addEssentialWindow(symbolPicker)
         windowManager.addEssentialWindow(emojiPicker)
         windowManager.addEssentialWindow(emoticonPicker)
+        // show KeyboardWindow by default
+        windowManager.attachWindow(KeyboardWindow)
 
         broadcaster.onImeUpdate(fcitx.runImmediately { inputMethodEntryCached })
-
-        service.window.window!!.also {
-            when (navbarBackground) {
-                NavbarBackground.None -> {
-                    WindowCompat.setDecorFitsSystemWindows(it, true)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        it.isNavigationBarContrastEnforced = true
-                    }
-                }
-                NavbarBackground.ColorOnly -> {
-                    shouldUpdateNavbarForeground = true
-                    shouldUpdateNavbarBackground = true
-                    WindowCompat.setDecorFitsSystemWindows(it, true)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        it.isNavigationBarContrastEnforced = false
-                    }
-                }
-                NavbarBackground.Full -> {
-                    shouldUpdateNavbarForeground = true
-                    // allow draw behind navigation bar
-                    WindowCompat.setDecorFitsSystemWindows(it, false)
-                    // transparent navigation bar
-                    it.navigationBarColor = Color.TRANSPARENT
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        // don't apply scrim to transparent navigation bar
-                        it.isNavigationBarContrastEnforced = false
-                    }
-                    ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-                        insets.getInsets(WindowInsetsCompat.Type.navigationBars()).let {
-                            bottomPaddingSpace.updateLayoutParams<LayoutParams> {
-                                bottomMargin = it.bottom
-                            }
-                        }
-                        WindowInsetsCompat.CONSUMED
-                    }
-                }
-            }
-        }
 
         customBackground.imageDrawable = theme.backgroundDrawable(keyBorder)
 
@@ -317,6 +257,8 @@ class InputView(
             centerVertically()
             centerHorizontally()
         })
+
+        keyboardPrefs.registerOnChangeListener(onKeyboardSizeChangeListener)
     }
 
     private fun updateKeyboardSize() {
@@ -329,8 +271,8 @@ class InputView(
         val sidePadding = keyboardSidePaddingPx
         if (sidePadding == 0) {
             // hide side padding space views when unnecessary
-            leftPaddingSpace.visibility = View.GONE
-            rightPaddingSpace.visibility = View.GONE
+            leftPaddingSpace.visibility = GONE
+            rightPaddingSpace.visibility = GONE
             windowManager.view.updateLayoutParams<LayoutParams> {
                 startToEnd = unset
                 endToStart = unset
@@ -338,8 +280,8 @@ class InputView(
                 endOfParent()
             }
         } else {
-            leftPaddingSpace.visibility = View.VISIBLE
-            rightPaddingSpace.visibility = View.VISIBLE
+            leftPaddingSpace.visibility = VISIBLE
+            rightPaddingSpace.visibility = VISIBLE
             leftPaddingSpace.updateLayoutParams {
                 width = sidePadding
             }
@@ -357,26 +299,17 @@ class InputView(
         kawaiiBar.view.setPadding(sidePadding, 0, sidePadding, 0)
     }
 
+    override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
+        bottomPaddingSpace.updateLayoutParams<LayoutParams> {
+            bottomMargin = getNavBarBottomInset(insets)
+        }
+        return insets
+    }
+
     /**
      * called when [InputView] is about to show, or restart
      */
     fun startInput(info: EditorInfo, capFlags: CapabilityFlags, restarting: Boolean = false) {
-        if (!restarting) {
-            if (shouldUpdateNavbarForeground || shouldUpdateNavbarBackground) {
-                service.window.window!!.also {
-                    if (shouldUpdateNavbarForeground) {
-                        WindowCompat.getInsetsController(it, it.decorView)
-                            .isAppearanceLightNavigationBars = !theme.isDark
-                    }
-                    if (shouldUpdateNavbarBackground) {
-                        it.navigationBarColor = when (theme) {
-                            is Theme.Builtin -> if (keyBorder) theme.backgroundColor else theme.keyboardColor
-                            is Theme.Custom -> theme.backgroundColor
-                        }
-                    }
-                }
-            }
-        }
         broadcaster.onStartInput(info, capFlags)
         returnKeyDrawable.updateDrawableOnEditorInfo(info)
         if (focusChangeResetKeyboard || !restarting) {
@@ -384,7 +317,7 @@ class InputView(
         }
     }
 
-    private fun handleFcitxEvent(it: FcitxEvent<*>) {
+    override fun handleFcitxEvent(it: FcitxEvent<*>) {
         when (it) {
             is FcitxEvent.CandidateListEvent -> {
                 broadcaster.onCandidateUpdate(it.data)
@@ -412,49 +345,14 @@ class InputView(
         broadcaster.onSelectionUpdate(start, end)
     }
 
-    private var showingDialog: Dialog? = null
-
-    fun showDialog(dialog: Dialog) {
-        showingDialog?.dismiss()
-        val windowToken = windowToken
-        check(windowToken != null) { "InputView Token is null." }
-        val window = dialog.window!!
-        window.attributes.apply {
-            token = windowToken
-            type = WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG
-        }
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
-                    WindowManager.LayoutParams.FLAG_DIM_BEHIND
-        )
-        window.setDimAmount(themedContext.styledFloat(android.R.attr.backgroundDimAmount))
-        showingDialog = dialog.apply {
-            setOnDismissListener { this@InputView.showingDialog = null }
-            show()
-        }
-    }
-
-    /**
-     * called when [InputView] is being hidden
-     */
-    fun finishInput() {
-        showingDialog?.dismiss()
-    }
-
     @RequiresApi(Build.VERSION_CODES.R)
     fun handleInlineSuggestions(response: InlineSuggestionsResponse): Boolean {
         return kawaiiBar.handleInlineSuggestions(response)
     }
 
     override fun onDetachedFromWindow() {
-        keyboardSizePrefs.forEach {
-            it.unregisterOnChangeListener(onKeyboardSizeChangeListener)
-        }
-        ViewCompat.setOnApplyWindowInsetsListener(this, null)
-        showingDialog?.dismiss()
-        // cancel eventHandlerJob and then clear DynamicScope,
-        // implies that InputView should not be attached again after detached.
-        eventHandlerJob.cancel()
+        keyboardPrefs.unregisterOnChangeListener(onKeyboardSizeChangeListener)
+        // clear DynamicScope, implies that InputView should not be attached again after detached.
         scope.clear()
         super.onDetachedFromWindow()
     }

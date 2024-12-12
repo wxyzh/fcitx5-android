@@ -1,10 +1,13 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
+
 package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
+import android.app.Dialog
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
@@ -20,6 +23,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.WindowManager
 import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
@@ -36,7 +40,6 @@ import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -56,20 +59,23 @@ import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.InputFeedbacks
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceProvider
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.cursor.CursorRange
 import org.fcitx.fcitx5.android.input.cursor.CursorTracker
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import org.fcitx.fcitx5.android.utils.alpha
+import org.fcitx.fcitx5.android.utils.forceShowSelf
 import org.fcitx.fcitx5.android.utils.inputMethodManager
+import org.fcitx.fcitx5.android.utils.monitorCursorAnchor
+import org.fcitx.fcitx5.android.utils.styledFloat
 import org.fcitx.fcitx5.android.utils.withBatchEdit
 import splitties.bitflags.hasFlag
 import splitties.dimensions.dp
 import splitties.resources.styledColor
 import timber.log.Timber
 import kotlin.math.max
-
 
 class FcitxInputMethodService : LifecycleInputMethodService() {
 
@@ -82,7 +88,16 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     private lateinit var pkgNameCache: PackageNameCache
 
+    private lateinit var decorView: View
+    private lateinit var contentView: FrameLayout
     private var inputView: InputView? = null
+    private var candidatesView: CandidatesView? = null
+
+    private val navbarMgr = NavigationBarManager()
+    private val inputDeviceMgr = InputDeviceManager onChange@{
+        val w = window.window ?: return@onChange
+        navbarMgr.evaluate(w, useVirtualKeyboard = it)
+    }
 
     private var capabilityFlags = CapabilityFlags.DefaultFlags
 
@@ -103,33 +118,56 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     private var highlightColor: Int = 0x66008577 // material_deep_teal_500 with alpha 0.4
 
-    private val ignoreSystemCursor by AppPrefs.getInstance().advanced.ignoreSystemCursor
+    private val prefs = AppPrefs.getInstance()
+    private val inlineSuggestions by prefs.keyboard.inlineSuggestions
+    private val ignoreSystemCursor by prefs.advanced.ignoreSystemCursor
 
-    private val inlineSuggestions by AppPrefs.getInstance().keyboard.inlineSuggestions
+    private val recreateInputViewPrefs: Array<ManagedPreference<*>> = arrayOf(
+        prefs.keyboard.expandKeypressArea,
+        prefs.advanced.disableAnimation,
+        prefs.advanced.ignoreSystemWindowInsets,
+    )
+
+    private fun replaceInputView(theme: Theme): InputView {
+        val newInputView = InputView(this, fcitx, theme)
+        setInputView(newInputView)
+        inputDeviceMgr.setInputView(newInputView)
+        navbarMgr.setupInputView(newInputView)
+        inputView = newInputView
+        return newInputView
+    }
+
+    private fun replaceCandidateView(theme: Theme): CandidatesView {
+        val newCandidatesView = CandidatesView(this, fcitx, theme)
+        // replace CandidatesView manually
+        contentView.removeView(candidatesView)
+        // put CandidatesView directly under content view
+        contentView.addView(newCandidatesView)
+        inputDeviceMgr.setCandidatesView(newCandidatesView)
+        navbarMgr.setupInputView(newCandidatesView)
+        candidatesView = newCandidatesView
+        return newCandidatesView
+    }
+
+    private fun replaceInputViews(theme: Theme) {
+        navbarMgr.evaluate(window.window!!)
+        replaceInputView(theme)
+        replaceCandidateView(theme)
+    }
 
     @Keep
     private val recreateInputViewListener = ManagedPreference.OnChangeListener<Any> { _, _ ->
-        recreateInputView(ThemeManager.activeTheme)
+        replaceInputView(ThemeManager.activeTheme)
+    }
+
+    @Keep
+    private val recreateCandidatesViewListener = ManagedPreferenceProvider.OnChangeListener {
+        replaceCandidateView(ThemeManager.activeTheme)
     }
 
     @Keep
     private val onThemeChangeListener = ThemeManager.OnThemeChangeListener {
-        recreateInputView(it)
-    }
-
-    private fun recreateInputView(theme: Theme) {
-        // InputView should be created first in onCreateInputView
-        // setInputView should be used to 'replace' current InputView only
-        InputView(this, fcitx, theme).also {
-            inputView = it
-            setInputView(it)
-        }
-    }
-
-    private fun postJob(scope: CoroutineScope, block: suspend () -> Unit): Job {
-        val job = scope.launch(start = CoroutineStart.LAZY) { block() }
-        jobs.trySend(job)
-        return job
+        replaceInputViews(it)
     }
 
     /**
@@ -139,8 +177,13 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
      * subsequent operations can start if the prior operation is not finished (suspended),
      * [postFcitxJob] ensures that operations are executed sequentially.
      */
-    fun postFcitxJob(block: suspend FcitxAPI.() -> Unit) =
-        postJob(fcitx.lifecycleScope) { fcitx.runOnReady(block) }
+    fun postFcitxJob(block: suspend FcitxAPI.() -> Unit): Job {
+        val job = fcitx.lifecycleScope.launch(start = CoroutineStart.LAZY) {
+            fcitx.runOnReady(block)
+        }
+        jobs.trySend(job)
+        return job
+    }
 
     override fun onCreate() {
         fcitx = FcitxDaemon.connect(javaClass.name)
@@ -153,10 +196,10 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             }
         }
         pkgNameCache = PackageNameCache(this)
-        AppPrefs.getInstance().apply {
-            keyboard.expandKeypressArea.registerOnChangeListener(recreateInputViewListener)
-            advanced.disableAnimation.registerOnChangeListener(recreateInputViewListener)
+        recreateInputViewPrefs.forEach {
+            it.registerOnChangeListener(recreateInputViewListener)
         }
+        prefs.candidates.registerOnChangeListener(recreateCandidatesViewListener)
         ThemeManager.addOnChangedListener(onThemeChangeListener)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             postFcitxJob {
@@ -164,6 +207,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             }
         }
         super.onCreate()
+        decorView = window.window!!.decorView
+        contentView = decorView.findViewById(android.R.id.content)
     }
 
     private fun handleFcitxEvent(event: FcitxEvent<*>) {
@@ -410,31 +455,35 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onWindowShown() {
         super.onWindowShown()
+        try {
+            highlightColor = styledColor(android.R.attr.colorAccent).alpha(0.4f)
+        } catch (_: Exception) {
+            Timber.w("Device does not support android.R.attr.colorAccent which it should have.")
+        }
         InputFeedbacks.syncSystemPrefs()
+        // navbar foreground/background color would reset every time window shows
+        navbarMgr.update(window.window!!)
     }
 
-    override fun onCreateInputView(): View {
-        // onCreateInputView will be called once, when the input area is first displayed,
-        // during each onConfigurationChanged period.
-        // That is, onCreateInputView would be called again, after system dark mode changes,
-        // or screen orientation changes.
-        return InputView(this, fcitx, ThemeManager.activeTheme).also {
-            inputView = it
-        }
+    override fun onCreateInputView(): View? {
+        replaceInputViews(ThemeManager.activeTheme)
+        // We will call `setInputView` by ourselves. This is fine.
+        return null
     }
 
     override fun setInputView(view: View) {
-        try {
-            highlightColor = view.styledColor(android.R.attr.colorAccent).alpha(0.4f)
-        } catch (e: Exception) {
-            Timber.w("Device does not support android.R.attr.colorAccent which it should have.")
-        }
-        window.window!!.decorView
-            .findViewById<FrameLayout>(android.R.id.inputArea)
+        super.setInputView(view)
+        // input method layout has not changed in 11 years:
+        // https://android.googlesource.com/platform/frameworks/base/+/ae3349e1c34f7aceddc526cd11d9ac44951e97b6/core/res/res/layout/input_method.xml
+        // expand inputArea to fullscreen
+        contentView.findViewById<FrameLayout>(android.R.id.inputArea)
             .updateLayoutParams<ViewGroup.LayoutParams> {
                 height = ViewGroup.LayoutParams.MATCH_PARENT
             }
-        super.setInputView(view)
+        /**
+         * expand InputView to fullscreen, since [android.inputmethodservice.InputMethodService.setInputView]
+         * would set InputView's height to [ViewGroup.LayoutParams.WRAP_CONTENT]
+         */
         view.updateLayoutParams<ViewGroup.LayoutParams> {
             height = ViewGroup.LayoutParams.MATCH_PARENT
         }
@@ -444,20 +493,32 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
+    private var inputViewLocation = intArrayOf(0, 0)
+
     override fun onComputeInsets(outInsets: Insets) {
-        val (_, y) = intArrayOf(0, 0).also { inputView?.keyboardView?.getLocationInWindow(it) }
-        outInsets.apply {
-            contentTopInsets = y
-            touchableInsets = Insets.TOUCHABLE_INSETS_CONTENT
-            touchableRegion.setEmpty()
-            visibleTopInsets = y
+        if (inputDeviceMgr.isVirtualKeyboard) {
+            inputView?.keyboardView?.getLocationInWindow(inputViewLocation)
+            outInsets.apply {
+                contentTopInsets = inputViewLocation[1]
+                visibleTopInsets = inputViewLocation[1]
+                touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            }
+        } else {
+            val n = decorView.findViewById<View>(android.R.id.navigationBarBackground)?.height ?: 0
+            val h = decorView.height - n
+            outInsets.apply {
+                contentTopInsets = h
+                visibleTopInsets = h
+                touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            }
         }
     }
 
-    // TODO: candidate view for physical keyboard input
-    // always show InputView since we do not support physical keyboard input without it yet
+    // always show InputView since we delegate CandidatesView's visibility to it
     @SuppressLint("MissingSuperCall")
     override fun onEvaluateInputViewShown() = true
+
+    fun superEvaluateInputViewShown() = super.onEvaluateInputViewShown()
 
     override fun onEvaluateFullscreenMode() = false
 
@@ -490,11 +551,33 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // request to show floating CandidatesView when pressing physical keyboard
+        if (inputDeviceMgr.evaluateOnKeyDown(event, this)) {
+            postFcitxJob {
+                focus(true)
+            }
+            forceShowSelf()
+        }
         return forwardKeyEvent(event) || super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         return forwardKeyEvent(event) || super.onKeyUp(keyCode, event)
+    }
+
+    // Added in API level 14, deprecated in 29
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onViewClicked(focusChanged: Boolean) {
+        super.onViewClicked(focusChanged)
+        if (Build.VERSION.SDK_INT < 34) {
+            inputDeviceMgr.evaluateOnViewClicked(this)
+        }
+    }
+
+    @TargetApi(34)
+    override fun onUpdateEditorToolType(toolType: Int) {
+        super.onUpdateEditorToolType(toolType)
+        inputDeviceMgr.evaluateOnUpdateEditorToolType(toolType, this)
     }
 
     private var firstBindInput = true
@@ -579,9 +662,17 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         postFcitxJob {
             focus(true)
         }
-        // because onStartInputView will always be called after onStartInput,
-        // editorInfo and capFlags should be up-to-date
-        inputView?.startInput(info, capabilityFlags, restarting)
+        if (inputDeviceMgr.evaluateOnStartInputView(info, this)) {
+            // because onStartInputView will always be called after onStartInput,
+            // editorInfo and capFlags should be up-to-date
+            inputView?.startInput(info, capabilityFlags, restarting)
+        } else {
+            // monitor cursor anchor only when needed, ie
+            // InputView just becomes visible && using floating CandidatesView
+            if (!restarting) {
+                currentInputConnection?.monitorCursorAnchor()
+            }
+        }
     }
 
     override fun onUpdateSelection(
@@ -599,8 +690,58 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         inputView?.updateSelection(newSelStart, newSelEnd)
     }
 
+    private val contentSize = floatArrayOf(0f, 0f)
+    private val decorLocation = floatArrayOf(0f, 0f)
+    private val decorLocationInt = intArrayOf(0, 0)
+    private var decorLocationUpdated = false
+
+    private fun updateDecorLocation() {
+        contentSize[0] = contentView.width.toFloat()
+        contentSize[1] = contentView.height.toFloat()
+        decorView.getLocationOnScreen(decorLocationInt)
+        decorLocation[0] = decorLocationInt[0].toFloat()
+        decorLocation[1] = decorLocationInt[1].toFloat()
+        decorLocationUpdated = true
+    }
+
+    private val anchorPosition = floatArrayOf(0f, 0f, 0f, 0f)
+
     override fun onUpdateCursorAnchorInfo(info: CursorAnchorInfo) {
-        // CursorAnchorInfo focus more on screen coordinates rather than selection
+        val bounds = info.getCharacterBounds(0)
+        if (bounds != null) {
+            // anchor to start of composing span instead of insertion mark if available
+            val horizontal =
+                if (candidatesView?.layoutDirection == View.LAYOUT_DIRECTION_RTL) bounds.right else bounds.left
+            anchorPosition[0] = horizontal
+            anchorPosition[1] = bounds.bottom
+            anchorPosition[2] = horizontal
+            anchorPosition[3] = bounds.top
+        } else {
+            anchorPosition[0] = info.insertionMarkerHorizontal
+            anchorPosition[1] = info.insertionMarkerBottom
+            anchorPosition[2] = info.insertionMarkerHorizontal
+            anchorPosition[3] = info.insertionMarkerTop
+        }
+        // avoid calling `decorView.getLocationOnScreen` repeatedly
+        if (!decorLocationUpdated) {
+            updateDecorLocation()
+        }
+        if (anchorPosition.any(Float::isNaN)) {
+            anchorPosition[0] = 0f
+            anchorPosition[1] = contentSize[1]
+            anchorPosition[2] = 0f
+            anchorPosition[3] = contentSize[1]
+            candidatesView?.updateCursorAnchor(anchorPosition, contentSize)
+            return
+        }
+        // params of `Matrix.mapPoints` must be [x0, y0, x1, y1]
+        info.matrix.mapPoints(anchorPosition)
+        val (xOffset, yOffset) = decorLocation
+        anchorPosition[0] -= xOffset
+        anchorPosition[1] -= yOffset
+        anchorPosition[2] -= xOffset
+        anchorPosition[3] -= yOffset
+        candidatesView?.updateCursorAnchor(anchorPosition, contentSize)
     }
 
     private fun handleCursorUpdate(newSelStart: Int, newSelEnd: Int, updateIndex: Int) {
@@ -652,7 +793,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     // because setComposingText(text, cursor) can only put cursor at end of composing,
-    // sometimes onUpdateCursorAnchorInfo/onUpdateSelection would receive event with wrong cursor position.
+    // sometimes onUpdateSelection would receive event with wrong cursor position.
     // those events need to be filtered.
     // because of https://android.googlesource.com/platform/frameworks/base.git/+/refs/tags/android-11.0.0_r45/core/java/android/view/inputmethod/BaseInputConnection.java#851
     // it's not possible to set cursor inside composing text
@@ -660,7 +801,18 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val ic = currentInputConnection ?: return
         val lastSelection = selection.latest
         ic.beginBatchEdit()
-        if (!composingText.spanEquals(text)) {
+        if (composingText.spanEquals(text)) {
+            // composing text content is up-to-date
+            // update cursor only when it's not empty AND cursor position is valid
+            if (text.length > 0 && text.cursor >= 0) {
+                val p = text.cursor + composing.start
+                if (p != lastSelection.start) {
+                    Timber.d("updateComposingText: set Android selection ($p, $p)")
+                    ic.setSelection(p, p)
+                    selection.predict(p)
+                }
+            }
+        } else {
             // composing text content changed
             Timber.d("updateComposingText: '$text' lastSelection=$lastSelection")
             if (text.isEmpty()) {
@@ -692,17 +844,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 }
             }
             Timber.d("updateComposingText: composing=$composing")
-        } else {
-            // composing text content is up-to-date
-            // update cursor only when it's not empty AND cursor position is valid
-            if (text.length > 0 && text.cursor >= 0) {
-                val p = text.cursor + composing.start
-                if (p != lastSelection.start) {
-                    Timber.d("updateComposingText: set Android selection ($p, $p)")
-                    ic.setSelection(p, p)
-                    selection.predict(p)
-                }
-            }
         }
         composingText = text
         ic.endBatchEdit()
@@ -723,7 +864,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     @SuppressLint("RestrictedApi")
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
-        if (!inlineSuggestions) return null
+        // ignore inline suggestion when disabled by user || using physical keyboard with floating candidates view
+        if (!inlineSuggestions || !inputDeviceMgr.isVirtualKeyboard) return null
         val theme = ThemeManager.activeTheme
         val chipDrawable =
             if (theme.isDark) R.drawable.bkg_inline_suggestion_dark else R.drawable.bkg_inline_suggestion_light
@@ -779,27 +921,23 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
-        if (!inlineSuggestions) return false
-        return inputView?.handleInlineSuggestions(response) ?: false
-    }
-
-    fun nextInputMethodApp() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            switchToNextInputMethod(false)
-        } else {
-            @Suppress("DEPRECATION")
-            inputMethodManager.switchToNextInputMethod(window.window!!.attributes.token, false)
-        }
+        if (!inlineSuggestions || !inputDeviceMgr.isVirtualKeyboard) return false
+        return inputView?.handleInlineSuggestions(response) == true
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         Timber.d("onFinishInputView: finishingInput=$finishingInput")
-        currentInputConnection?.finishComposingText()
+        decorLocationUpdated = false
+        inputDeviceMgr.onFinishInputView()
+        currentInputConnection?.apply {
+            finishComposingText()
+            monitorCursorAnchor(false)
+        }
         resetComposingState()
         postFcitxJob {
             focus(false)
         }
-        inputView?.finishInput()
+        showingDialog?.dismiss()
     }
 
     override fun onFinishInput() {
@@ -820,18 +958,39 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onDestroy() {
-        AppPrefs.getInstance().apply {
-            keyboard.expandKeypressArea.unregisterOnChangeListener(recreateInputViewListener)
-            advanced.disableAnimation.unregisterOnChangeListener(recreateInputViewListener)
+        recreateInputViewPrefs.forEach {
+            it.unregisterOnChangeListener(recreateInputViewListener)
         }
+        prefs.candidates.unregisterOnChangeListener(recreateCandidatesViewListener)
         ThemeManager.removeOnChangedListener(onThemeChangeListener)
         super.onDestroy()
         // Fcitx might be used in super.onDestroy()
         FcitxDaemon.disconnect(javaClass.name)
     }
 
+    private var showingDialog: Dialog? = null
+
+    fun showDialog(dialog: Dialog) {
+        showingDialog?.dismiss()
+        dialog.window?.also {
+            it.attributes.apply {
+                token = decorView.windowToken
+                type = WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG
+            }
+            it.addFlags(
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or WindowManager.LayoutParams.FLAG_DIM_BEHIND
+            )
+            it.setDimAmount(styledFloat(android.R.attr.backgroundDimAmount))
+        }
+        dialog.setOnDismissListener {
+            showingDialog = null
+        }
+        dialog.show()
+        showingDialog = dialog
+    }
+
+    @Suppress("ConstPropertyName")
     companion object {
         const val DeleteSurroundingFlag = "org.fcitx.fcitx5.android.DELETE_SURROUNDING"
     }
-
 }

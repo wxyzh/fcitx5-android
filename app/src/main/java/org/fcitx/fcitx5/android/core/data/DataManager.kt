@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.core.data
 
@@ -28,6 +28,11 @@ import kotlin.concurrent.withLock
  * Operations are synchronized
  */
 object DataManager {
+
+    data class PluginSet(
+        val loaded: Set<PluginDescriptor>,
+        val failed: Map<String, PluginLoadFailed>
+    )
 
     const val PLUGIN_INTENT = "${BuildConfig.APPLICATION_ID}.plugin.MANIFEST"
 
@@ -69,6 +74,8 @@ object DataManager {
     fun getLoadedPlugins(): Set<PluginDescriptor> = loadedPlugins
     fun getFailedPlugins(): Map<String, PluginLoadFailed> = failedPlugins
 
+    fun getSyncedPluginSet() = PluginSet(loadedPlugins, failedPlugins)
+
     /**
      * Will be cleared after each sync
      */
@@ -77,7 +84,7 @@ object DataManager {
     fun addOnNextSyncedCallback(block: () -> Unit) =
         callbacks.add(block)
 
-    fun detectPlugins(): Pair<Set<PluginDescriptor>, Map<String, PluginLoadFailed>> {
+    fun detectPlugins(): PluginSet {
         val toLoad = mutableSetOf<PluginDescriptor>()
         val preloadFailed = mutableMapOf<String, PluginLoadFailed>()
 
@@ -113,36 +120,15 @@ object DataManager {
             var apiVersion: String? = null
             var description: String? = null
             var hasService = false
-            val libraryDependency = mutableMapOf<String, List<String>>()
-            var library: String? = null
-            var dependency: ArrayList<String>? = null
             var text: String? = null
             while ((eventType != XmlPullParser.END_DOCUMENT)) {
                 when (eventType) {
                     XmlPullParser.TEXT -> text = parser.text
-                    XmlPullParser.START_TAG -> when (parser.name) {
-                        "library" -> {
-                            dependency = arrayListOf()
-                            for (i in 0..<parser.attributeCount) {
-                                if (parser.getAttributeName(i) == "name") {
-                                    library = parser.getAttributeValue(i)
-                                }
-                            }
-                        }
-                    }
                     XmlPullParser.END_TAG -> when (parser.name) {
                         "apiVersion" -> apiVersion = text
                         "domain" -> domain = text
                         "description" -> description = text
                         "hasService" -> hasService = text?.lowercase() == "true"
-                        "dependency" -> dependency?.add(text!!)
-                        "library" -> {
-                            if (library != null && dependency != null) {
-                                libraryDependency[library] = dependency
-                                library = null
-                                dependency = null
-                            }
-                        }
                     }
                 }
                 eventType = parser.next()
@@ -176,9 +162,8 @@ object DataManager {
                             domain,
                             description,
                             hasService,
-                            info.versionName,
-                            info.applicationInfo.nativeLibraryDir,
-                            libraryDependency
+                            info.versionName ?: "",
+                            info.applicationInfo?.nativeLibraryDir ?: ""
                         )
                     )
                 } else {
@@ -190,7 +175,7 @@ object DataManager {
                 preloadFailed[packageName] = PluginLoadFailed.PluginDescriptorParseError
             }
         }
-        return toLoad to preloadFailed
+        return PluginSet(toLoad, preloadFailed)
     }
 
     fun sync() = lock.withLock {

@@ -6,6 +6,8 @@ package org.fcitx.fcitx5.android.core
 
 sealed class FcitxEvent<T>(open val data: T) {
 
+    data class Candidate(val label: String, val text: String, val comment: String)
+
     abstract val eventType: EventType
 
     data class CandidateListEvent(override val data: Data) :
@@ -13,7 +15,7 @@ sealed class FcitxEvent<T>(open val data: T) {
 
         override val eventType = EventType.Candidate
 
-        data class Data(val total: Int, val candidates: Array<String>) {
+        data class Data(val total: Int = -1, val candidates: Array<String> = emptyArray()) {
 
             override fun toString(): String =
                 "total=$total, candidates=[${candidates.joinToString(limit = 5)}]"
@@ -121,9 +123,61 @@ sealed class FcitxEvent<T>(open val data: T) {
     data class DeleteSurroundingEvent(override val data: Data) :
         FcitxEvent<DeleteSurroundingEvent.Data>(data) {
 
-            override val eventType = EventType.DeleteSurrounding
+        override val eventType = EventType.DeleteSurrounding
 
         data class Data(val before: Int, val after: Int)
+    }
+
+    data class PagedCandidateEvent(override val data: Data) :
+        FcitxEvent<PagedCandidateEvent.Data>(data) {
+
+        override val eventType = EventType.PagedCandidate
+
+        enum class LayoutHint(value: Int) {
+            NotSet(0), Vertical(1), Horizontal(2);
+
+            companion object {
+                private val Types = entries.toTypedArray()
+                fun of(value: Int) = Types[value]
+            }
+        }
+
+        data class Data(
+            val candidates: Array<Candidate>,
+            val cursorIndex: Int,
+            val layoutHint: LayoutHint,
+            val hasPrev: Boolean,
+            val hasNext: Boolean
+        ) {
+            companion object {
+                @Suppress("BooleanLiteralArgument")
+                val Empty = Data(emptyArray(), -1, LayoutHint.NotSet, false, false)
+            }
+
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (javaClass != other?.javaClass) return false
+
+                other as Data
+
+                if (!candidates.contentEquals(other.candidates)) return false
+                if (cursorIndex != other.cursorIndex) return false
+                if (layoutHint != other.layoutHint) return false
+                if (hasPrev != other.hasPrev) return false
+                if (hasNext != other.hasNext) return false
+
+                return true
+            }
+
+            override fun hashCode(): Int {
+                var result = candidates.contentHashCode()
+                result = 31 * result + cursorIndex
+                result = 31 * result + layoutHint.hashCode()
+                result = 31 * result + hasPrev.hashCode()
+                result = 31 * result + hasNext.hashCode()
+                return result
+            }
+        }
     }
 
     data class UnknownEvent(override val data: Array<Any>) : FcitxEvent<Array<Any>>(data) {
@@ -156,12 +210,13 @@ sealed class FcitxEvent<T>(open val data: T) {
         Change,
         StatusArea,
         DeleteSurrounding,
+        PagedCandidate,
         Unknown
     }
 
     companion object {
 
-        private val Types = EventType.values()
+        private val Types = EventType.entries.toTypedArray()
 
         @Suppress("UNCHECKED_CAST")
         fun create(type: Int, params: Array<Any>) =
@@ -205,6 +260,19 @@ sealed class FcitxEvent<T>(open val data: T) {
                 )
                 EventType.DeleteSurrounding -> (params[0] as IntArray).let {
                     DeleteSurroundingEvent(DeleteSurroundingEvent.Data(it[0], it[1]))
+                }
+                EventType.PagedCandidate -> if (params.isEmpty()) {
+                    PagedCandidateEvent(PagedCandidateEvent.Data.Empty)
+                } else {
+                    PagedCandidateEvent(
+                        PagedCandidateEvent.Data(
+                            params[0] as Array<Candidate>,
+                            params[1] as Int,
+                            PagedCandidateEvent.LayoutHint.of(params[2] as Int),
+                            params[3] as Boolean,
+                            params[4] as Boolean
+                        )
+                    )
                 }
                 else -> UnknownEvent(params)
             }

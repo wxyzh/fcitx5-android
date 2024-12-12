@@ -35,9 +35,7 @@ abstract class ManagedPreference<T : Any>(
 
     override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) = setValue(value)
 
-    private val listeners by lazy {
-        WeakHashSet<OnChangeListener<T>>()
-    }
+    private lateinit var listeners: MutableSet<OnChangeListener<T>>
 
     /**
      * **WARN:** No anonymous listeners, please **KEEP** the reference!
@@ -47,15 +45,19 @@ abstract class ManagedPreference<T : Any>(
      * or simply mark the listener with [@Keep][androidx.annotation.Keep] .
      */
     fun registerOnChangeListener(listener: OnChangeListener<T>) {
+        if (!::listeners.isInitialized) {
+            listeners = WeakHashSet()
+        }
         listeners.add(listener)
     }
 
     fun unregisterOnChangeListener(listener: OnChangeListener<T>) {
+        if (!::listeners.isInitialized || listeners.isEmpty()) return
         listeners.remove(listener)
     }
 
     fun fireChange() {
-        if (listeners.isEmpty()) return
+        if (!::listeners.isInitialized || listeners.isEmpty()) return
         val newValue = getValue()
         listeners.forEach { it.onChange(key, newValue) }
     }

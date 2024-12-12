@@ -59,12 +59,22 @@ class PopupComponent :
     }
     private val hideThreshold = 100L
 
+    private val rootLocation = intArrayOf(0, 0)
+    private val rootBounds: Rect = Rect()
+
     val root by lazy {
         context.frameLayout {
             // we want (0, 0) at top left
             layoutDirection = View.LAYOUT_DIRECTION_LTR
             isClickable = false
             isFocusable = false
+
+            addOnLayoutChangeListener { v, left, top, right, bottom, _, _, _, _ ->
+                val (x, y) = rootLocation.also { v.getLocationInWindow(it) }
+                val width = right - left
+                val height = bottom - top
+                rootBounds.set(x, y, x + width, y + height)
+            }
         }
     }
 
@@ -110,6 +120,7 @@ class PopupComponent :
         val keyboardUi = PopupKeyboardUi(
             context,
             theme,
+            rootBounds,
             bounds,
             { dismissPopup(viewId) },
             popupRadius,
@@ -120,13 +131,7 @@ class PopupComponent :
             keys,
             labels
         )
-        root.apply {
-            add(keyboardUi.root, lParams {
-                leftMargin = bounds.left + keyboardUi.offsetX
-                topMargin = bounds.top + keyboardUi.offsetY
-            })
-        }
-        showingContainerUi[viewId] = keyboardUi
+        showPopupContainer(viewId, keyboardUi)
     }
 
     private fun showMenu(viewId: Int, menu: KeyDef.Popup.Menu, bounds: Rect) {
@@ -136,17 +141,22 @@ class PopupComponent :
         val menuUi = PopupMenuUi(
             context,
             theme,
+            rootBounds,
             bounds,
             { dismissPopup(viewId) },
             menu.items,
         )
+        showPopupContainer(viewId, menuUi)
+    }
+
+    private fun showPopupContainer(viewId: Int, ui: PopupContainerUi) {
         root.apply {
-            add(menuUi.root, lParams {
-                leftMargin = bounds.left + menuUi.offsetX
-                topMargin = bounds.top + menuUi.offsetY
+            add(ui.root, lParams {
+                leftMargin = ui.triggerBounds.left + ui.offsetX - rootBounds.left
+                topMargin = ui.triggerBounds.top + ui.offsetY - rootBounds.top
             })
         }
-        showingContainerUi[viewId] = menuUi
+        showingContainerUi[viewId] = ui
     }
 
     private fun changeFocus(viewId: Int, x: Float, y: Float): Boolean {

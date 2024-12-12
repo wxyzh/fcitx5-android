@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.core
 
@@ -169,6 +169,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
     override suspend fun triggerCandidateAction(idx: Int, actionIdx: Int) =
         withFcitxContext { triggerFcitxCandidateAction(idx, actionIdx) }
 
+    override suspend fun setCandidatePagingMode(mode: Int) =
+        withFcitxContext { setFcitxCandidatePagingMode(mode) }
+
     init {
         if (lifecycle.currentState != FcitxLifecycle.State.STOPPED)
             throw IllegalAccessException("Fcitx5 has already been created!")
@@ -214,9 +217,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             appLib: String,
             extData: String,
             extCache: String,
-            extDomains: Array<String>,
-            libraryNames: Array<String>,
-            libraryDependencies: Array<Array<String>>
+            extDomains: Array<String>
         )
 
         @JvmStatic
@@ -340,6 +341,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         external fun triggerFcitxCandidateAction(idx: Int, actionIdx: Int)
 
         @JvmStatic
+        external fun setFcitxCandidatePagingMode(mode: Int)
+
+        @JvmStatic
         external fun loopOnce()
 
         @JvmStatic
@@ -394,17 +398,13 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             val plugins = DataManager.getLoadedPlugins()
             val nativeLibDir = StringBuilder(context.applicationInfo.nativeLibraryDir)
             val extDomains = arrayListOf<String>()
-            val libraryNames = arrayListOf<String>()
-            val libraryDependency = arrayListOf<Array<String>>()
             plugins.forEach {
-                nativeLibDir.append(':')
-                nativeLibDir.append(it.nativeLibraryDir)
+                if (it.nativeLibraryDir.isNotBlank()) {
+                    nativeLibDir.append(':')
+                    nativeLibDir.append(it.nativeLibraryDir)
+                }
                 it.domain?.let { d ->
                     extDomains.add(d)
-                }
-                it.libraryDependency.forEach { (lib, dep) ->
-                    libraryNames.add(lib)
-                    libraryDependency.add(dep.toTypedArray())
                 }
             }
             Timber.d(
@@ -423,9 +423,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
                     nativeLibDir.toString(),
                     (getExternalFilesDir(null) ?: filesDir).absolutePath,
                     (externalCacheDir ?: cacheDir).absolutePath,
-                    extDomains.toTypedArray(),
-                    libraryNames.toTypedArray(),
-                    libraryDependency.toTypedArray()
+                    extDomains.toTypedArray()
                 )
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

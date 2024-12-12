@@ -1,7 +1,8 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
+
 package org.fcitx.fcitx5.android.input.candidates.expanded.window
 
 import android.util.DisplayMetrics
@@ -12,8 +13,8 @@ import com.google.android.flexbox.AlignItems
 import com.google.android.flexbox.FlexboxLayoutManager
 import com.google.android.flexbox.JustifyContent
 import org.fcitx.fcitx5.android.input.candidates.CandidateViewHolder
-import org.fcitx.fcitx5.android.input.candidates.adapter.PagingCandidateViewAdapter
 import org.fcitx.fcitx5.android.input.candidates.expanded.ExpandedCandidateLayout
+import org.fcitx.fcitx5.android.input.candidates.expanded.PagingCandidateViewAdapter
 import org.fcitx.fcitx5.android.input.candidates.expanded.decoration.FlexboxHorizontalDecoration
 import splitties.dimensions.dp
 import splitties.views.dsl.core.wrapContent
@@ -58,9 +59,9 @@ class FlexboxExpandedCandidateWindow :
                 addOnScrollListener(object : RecyclerView.OnScrollListener() {
                     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                         this@FlexboxExpandedCandidateWindow.layoutManager.apply {
-                            pageUpBtn.isEnabled = findFirstCompletelyVisibleItemPosition() != 0
+                            pageUpBtn.isEnabled = findFirstCompletelyVisibleItemPosition() > 0
                             pageDnBtn.isEnabled =
-                                findLastCompletelyVisibleItemPosition() != itemCount - 1
+                                findLastCompletelyVisibleItemPosition() < itemCount - 1
                         }
                     }
                 })

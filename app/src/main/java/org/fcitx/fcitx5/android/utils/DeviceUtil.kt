@@ -38,4 +38,12 @@ object DeviceUtil {
         getSystemProperty("ro.vivo.os.version").isNotEmpty()
     }
 
+    val isHonorMagicOS: Boolean by lazy {
+        getSystemProperty("ro.magic.systemversion").isNotEmpty()
+    }
+
+    val isFlyme: Boolean by lazy {
+        Build.DISPLAY.lowercase().contains("flyme")
+    }
+
 }

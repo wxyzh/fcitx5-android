@@ -6,8 +6,10 @@ package org.fcitx.fcitx5.android.data.clipboard
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
 import androidx.annotation.Keep
 import androidx.room.Room
+import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +25,7 @@ import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.utils.WeakHashSet
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.clipboardManager
+import timber.log.Timber
 
 object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.Default) {
@@ -144,26 +147,50 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
         }
     }
 
+    private var lastClipTimestamp = -1L
+    private var lastClipHash = 0
+
     override fun onPrimaryClipChanged() {
-        clipboardManager.primaryClip
-            ?.let { ClipboardEntry.fromClipData(it, transformer) }
-            ?.takeIf { it.text.isNotBlank() }
-            ?.let { e ->
-                launch {
-                    mutex.withLock {
-                        clbDao.find(e.text, e.sensitive)?.let {
-                            updateLastEntry(it.copy(timestamp = e.timestamp))
-                            clbDao.updateTime(it.id, e.timestamp)
-                            return@launch
-                        }
-                        val rowId = clbDao.insert(e)
-                        removeOutdated()
-                        updateItemCount()
-                        // new entry can be deleted immediately if clipboard limit == 0
-                        updateLastEntry(clbDao.get(rowId) ?: e)
+        val clip = clipboardManager.primaryClip ?: return
+        /**
+         * skip duplicate ClipData
+         * https://developer.android.com/reference/android/content/ClipboardManager.OnPrimaryClipChangedListener#onPrimaryClipChanged()
+         */
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val timestamp = clip.description.timestamp
+            if (timestamp == lastClipTimestamp) return
+            lastClipTimestamp = timestamp
+        } else {
+            val timestamp = System.currentTimeMillis()
+            val hash = clip.hashCode()
+            if (timestamp - lastClipTimestamp < 100L && hash == lastClipHash) return
+            lastClipTimestamp = timestamp
+            lastClipHash = hash
+        }
+        launch {
+            mutex.withLock {
+                val entry = ClipboardEntry.fromClipData(clip, transformer) ?: return@withLock
+                if (entry.text.isBlank()) return@withLock
+                try {
+                    clbDao.find(entry.text, entry.sensitive)?.let {
+                        updateLastEntry(it.copy(timestamp = entry.timestamp))
+                        clbDao.updateTime(it.id, entry.timestamp)
+                        return@withLock
                     }
+                    val insertedEntry = clbDb.withTransaction {
+                        val rowId = clbDao.insert(entry)
+                        removeOutdated()
+                        // new entry can be deleted immediately if clipboard limit == 0
+                        clbDao.get(rowId) ?: entry
+                    }
+                    updateLastEntry(insertedEntry)
+                    updateItemCount()
+                } catch (exception: Exception) {
+                    Timber.w("Failed to update clipboard database: $exception")
+                    updateLastEntry(entry)
                 }
             }
+        }
     }
 
     private suspend fun removeOutdated() {

@@ -1,9 +1,10 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.ui.main.settings.behavior
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +26,8 @@ import org.fcitx.fcitx5.android.ui.common.withLoadingDialog
 import org.fcitx.fcitx5.android.ui.main.MainViewModel
 import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.addPreference
+import org.fcitx.fcitx5.android.utils.buildDocumentsProviderIntent
+import org.fcitx.fcitx5.android.utils.buildPrimaryStorageIntent
 import org.fcitx.fcitx5.android.utils.formatDateTime
 import org.fcitx.fcitx5.android.utils.importErrorDialog
 import org.fcitx.fcitx5.android.utils.iso8601UTCDateTime
@@ -66,12 +69,8 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
                             }
                             withContext(Dispatchers.Main) {
                                 AppUtil.showRestartNotification(ctx)
-                                ctx.toast(
-                                    getString(
-                                        R.string.user_data_imported,
-                                        formatDateTime(metadata.exportTime)
-                                    )
-                                )
+                                val exportTime = formatDateTime(metadata.exportTime)
+                                ctx.toast(getString(R.string.user_data_imported, exportTime))
                             }
                         } catch (e: Exception) {
                             // re-start fcitx in case importing failed
@@ -102,8 +101,25 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
     }
 
     override fun onPreferenceUiCreated(screen: PreferenceScreen) {
+        val ctx = requireContext()
+        screen.addPreference(
+            R.string.browse_user_data_dir,
+            onClick = {
+                try {
+                    ctx.startActivity(buildDocumentsProviderIntent())
+                } catch (e: Exception) {
+                    ctx.toast(e)
+                }
+            },
+            onLongClick = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ({
+                try {
+                    ctx.startActivity(buildPrimaryStorageIntent())
+                } catch (e: Exception) {
+                    ctx.toast(e)
+                }
+            }) else null
+        )
         screen.addPreference(R.string.export_user_data) {
-            val ctx = requireContext()
             lifecycleScope.launch {
                 lifecycleScope.withLoadingDialog(ctx) {
                     viewModel.fcitx.runOnReady {
@@ -115,7 +131,6 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
             }
         }
         screen.addPreference(R.string.import_user_data) {
-            val ctx = requireContext()
             AlertDialog.Builder(ctx)
                 .setIconAttribute(android.R.attr.alertDialogIcon)
                 .setTitle(R.string.import_user_data)

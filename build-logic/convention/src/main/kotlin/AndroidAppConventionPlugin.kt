@@ -14,7 +14,6 @@ import org.gradle.api.Project
 import org.gradle.api.file.RegularFile
 import org.gradle.api.internal.provider.AbstractProperty
 import org.gradle.api.internal.provider.Providers
-import org.gradle.configurationcache.extensions.capitalized
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -43,14 +42,7 @@ class AndroidAppConventionPlugin : AndroidBaseConventionPlugin() {
                 release {
                     isMinifyEnabled = true
                     isShrinkResources = true
-                    signingConfig = target.signKey?.let {
-                        signingConfigs.create("release") {
-                            storeFile = it
-                            storePassword = target.signKeyPwd
-                            keyAlias = target.signKeyAlias
-                            keyPassword = target.signKeyPwd
-                        }
-                    }
+                    signingConfig = signingConfigs.fromProjectEnv(target)
                 }
                 debug {
                     applicationIdSuffix = ".debug"
@@ -76,6 +68,7 @@ class AndroidAppConventionPlugin : AndroidBaseConventionPlugin() {
                     excludes += setOf(
                         "/META-INF/*.version",
                         "/META-INF/*.kotlin_module",  // cannot be excluded actually
+                        "/META-INF/androidx/**",
                         "/DebugProbesKt.bin",
                         "/kotlin-tooling-metadata.json"
                     )

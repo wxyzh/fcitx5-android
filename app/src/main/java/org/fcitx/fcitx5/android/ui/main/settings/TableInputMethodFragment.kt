@@ -135,7 +135,7 @@ class TableInputMethodFragment : Fragment(), OnItemChangedListener<TableBasedInp
                 getText(R.string.table_im),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply { description = CHANNEL_ID }
-            notificationManager.createNotificationChannel(channel)
+            requireContext().notificationManager.createNotificationChannel(channel)
         }
     }
 
@@ -190,6 +190,8 @@ class TableInputMethodFragment : Fragment(), OnItemChangedListener<TableBasedInp
                 positiveButton.isEnabled = false
                 importConfAndDictUri()
                 false
+            }.apply {
+                setCanceledOnTouchOutside(false)
             }
     }
 

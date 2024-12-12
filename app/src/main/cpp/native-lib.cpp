@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 #include <jni.h>
 
@@ -41,7 +41,6 @@
 #include "customphrase.h"
 
 #include "androidfrontend/androidfrontend_public.h"
-#include "androidaddonloader/androidaddonloader.h"
 #include "jni-utils.h"
 #include "nativestreambuf.h"
 #include "helper-types.h"
@@ -81,10 +80,9 @@ public:
         return uv_run(get_event_base(), UV_RUN_ONCE);
     }
 
-    void startup(const fcitx::AndroidLibraryDependency& dependency,
-                 const std::function<void(fcitx::AddonInstance *)> &setupCallback) {
+    void startup(const std::function<void(fcitx::AddonInstance *)> &setupCallback) {
         p_instance = std::make_unique<fcitx::Instance>(0, nullptr);
-        p_instance->addonManager().registerLoader(std::make_unique<fcitx::AndroidSharedLibraryLoader>(dependency));
+        p_instance->addonManager().registerDefaultLoader(nullptr);
         p_dispatcher = std::make_unique<fcitx::EventDispatcher>();
         p_dispatcher->attach(&p_instance->eventLoop());
         p_instance->initialize();
@@ -427,6 +425,10 @@ public:
         return p_frontend->call<fcitx::IAndroidFrontend::triggerCandidateAction>(idx, actionIdx);
     }
 
+    void setCandidatePagingMode(int mode) {
+        return p_frontend->call<fcitx::IAndroidFrontend::setCandidatePagingMode>(mode);
+    }
+
     void save() {
         p_instance->save();
     }
@@ -503,9 +505,7 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_startupFcitx(
         jstring appLib,
         jstring extData,
         jstring extCache,
-        jobjectArray extDomains,
-        jobjectArray libraryNames,
-        jobjectArray libraryDependencies) {
+        jobjectArray extDomains) {
     if (Fcitx::Instance().isRunning()) {
         FCITX_ERROR() << "Fcitx is already running!";
         return;
@@ -579,21 +579,6 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_startupFcitx(
         fcitx::registerDomain(CString(env, domain), locale_dir_char);
     }
 
-    std::unordered_map<std::string, std::unordered_set<std::string>> depsMap;
-    const int librarySize = env->GetArrayLength(libraryNames);
-    for (int i = 0; i < librarySize; i++) {
-        auto jstringName = JRef<jstring>(env, env->GetObjectArrayElement(libraryNames, i));
-        auto lib = CString(env, jstringName);
-        auto jobjectArrayDeps = JRef<jobjectArray>(env, env->GetObjectArrayElement(libraryDependencies, i));
-        const int depSize = env->GetArrayLength(jobjectArrayDeps);
-        std::unordered_set<std::string> depSet(depSize);
-        for (int j = 0; j < depSize; j++) {
-            auto jstringDepName = JRef<jstring>(env, env->GetObjectArrayElement(jobjectArrayDeps, j));
-            depSet.emplace(CString(env, jstringDepName));
-        }
-        depsMap.emplace(lib, depSet);
-    }
-
     auto candidateListCallback = [](const std::vector<std::string> &candidates, const int size) {
         auto env = GlobalRef->AttachEnv();
         auto candidatesArray = JRef<jobjectArray>(env, env->NewObjectArray(static_cast<int>(candidates.size()), GlobalRef->String, nullptr));
@@ -645,15 +630,17 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_startupFcitx(
         env->CallStaticVoidMethod(GlobalRef->Fcitx, GlobalRef->HandleFcitxEvent, 5, *vararg);
     };
     auto imChangeCallback = []() {
-        auto env = GlobalRef->AttachEnv();
-        auto vararg = JRef<jobjectArray>(env, env->NewObjectArray(1, GlobalRef->Object, nullptr));
         std::unique_ptr<InputMethodStatus> status = Fcitx::Instance().inputMethodStatus();
         if (!status) return;
+        auto env = GlobalRef->AttachEnv();
+        auto vararg = JRef<jobjectArray>(env, env->NewObjectArray(1, GlobalRef->Object, nullptr));
         auto obj = JRef(env, fcitxInputMethodStatusToJObject(env, *status));
         env->SetObjectArrayElement(vararg, 0, obj);
         env->CallStaticVoidMethod(GlobalRef->Fcitx, GlobalRef->HandleFcitxEvent, 6, *vararg);
     };
     auto statusAreaUpdateCallback = []() {
+        std::unique_ptr<InputMethodStatus> status = Fcitx::Instance().inputMethodStatus();
+        if (!status) return;
         auto env = GlobalRef->AttachEnv();
         auto vararg = JRef<jobjectArray>(env, env->NewObjectArray(static_cast<int>(2), GlobalRef->Object, nullptr));
         const auto actions = Fcitx::Instance().statusAreaActions();
@@ -664,7 +651,6 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_startupFcitx(
             env->SetObjectArrayElement(actionArray, i++, obj);
         }
         env->SetObjectArrayElement(vararg, 0, actionArray);
-        std::unique_ptr<InputMethodStatus> status = Fcitx::Instance().inputMethodStatus();
         auto statusObj = JRef(env, fcitxInputMethodStatusToJObject(env, *status));
         env->SetObjectArrayElement(vararg, 1, statusObj);
         env->CallStaticVoidMethod(GlobalRef->Fcitx, GlobalRef->HandleFcitxEvent, 7, *vararg);
@@ -678,6 +664,30 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_startupFcitx(
         env->SetObjectArrayElement(vararg, 0, intArray);
         env->CallStaticVoidMethod(GlobalRef->Fcitx, GlobalRef->HandleFcitxEvent, 8, *vararg);
     };
+    auto pagedCandidateCallback = [](const PagedCandidateEntity &paged) {
+        auto env = GlobalRef->AttachEnv();
+        const int size = static_cast<int>(paged.candidates.size());
+        if (size == 0) {
+            auto vararg = JRef<jobjectArray>(env, env->NewObjectArray(0, GlobalRef->Object, nullptr));
+            env->CallStaticVoidMethod(GlobalRef->Fcitx, GlobalRef->HandleFcitxEvent, 9, *vararg);
+            return;
+        }
+        auto candidatesArray = JRef<jobjectArray>(env, env->NewObjectArray(size, GlobalRef->Candidate, nullptr));
+        for (int i = 0; i < size; ++i) {
+            env->SetObjectArrayElement(candidatesArray, i, candidateEntityToObject(env, paged.candidates[i]));
+        }
+        auto cursorIndex = JRef(env, env->NewObject(GlobalRef->Integer, GlobalRef->IntegerInit, paged.cursorIndex));
+        auto layoutHint = JRef(env, env->NewObject(GlobalRef->Integer, GlobalRef->IntegerInit, static_cast<int>(paged.layoutHint)));
+        auto hasPrev = JRef(env, env->NewObject(GlobalRef->Boolean, GlobalRef->BooleanInit, paged.hasPrev));
+        auto hasNext = JRef(env, env->NewObject(GlobalRef->Boolean, GlobalRef->BooleanInit, paged.hasNext));
+        auto vararg = JRef<jobjectArray>(env, env->NewObjectArray(5, GlobalRef->Object, nullptr));
+        env->SetObjectArrayElement(vararg, 0, candidatesArray);
+        env->SetObjectArrayElement(vararg, 1, cursorIndex);
+        env->SetObjectArrayElement(vararg, 2, layoutHint);
+        env->SetObjectArrayElement(vararg, 3, hasPrev);
+        env->SetObjectArrayElement(vararg, 4, hasNext);
+        env->CallStaticVoidMethod(GlobalRef->Fcitx, GlobalRef->HandleFcitxEvent, 9, *vararg);
+    };
     auto toastCallback = [](const std::string &s) {
         auto env = GlobalRef->AttachEnv();
         env->CallStaticVoidMethod(GlobalRef->Fcitx, GlobalRef->ShowToast, *JString(env, s));
@@ -686,7 +696,7 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_startupFcitx(
     umask(007);
     fcitx::StandardPath::global().syncUmask();
 
-    Fcitx::Instance().startup(depsMap, [&](auto *androidfrontend) {
+    Fcitx::Instance().startup([&](auto *androidfrontend) {
         FCITX_INFO() << "Setting up callback";
         readyCallback();
         androidfrontend->template call<fcitx::IAndroidFrontend::setCandidateListCallback>(candidateListCallback);
@@ -697,6 +707,7 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_startupFcitx(
         androidfrontend->template call<fcitx::IAndroidFrontend::setInputMethodChangeCallback>(imChangeCallback);
         androidfrontend->template call<fcitx::IAndroidFrontend::setStatusAreaUpdateCallback>(statusAreaUpdateCallback);
         androidfrontend->template call<fcitx::IAndroidFrontend::setDeleteSurroundingCallback>(deleteSurroundingCallback);
+        androidfrontend->template call<fcitx::IAndroidFrontend::setPagedCandidateCallback>(pagedCandidateCallback);
         androidfrontend->template call<fcitx::IAndroidFrontend::setToastCallback>(toastCallback);
     });
     FCITX_INFO() << "Finishing startup";
@@ -1048,6 +1059,13 @@ JNIEXPORT void JNICALL
 Java_org_fcitx_fcitx5_android_core_Fcitx_triggerFcitxCandidateAction(JNIEnv *env, jclass clazz, jint idx, jint action_idx) {
     RETURN_IF_NOT_RUNNING
     Fcitx::Instance().triggerCandidateAction(idx, action_idx);
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_org_fcitx_fcitx5_android_core_Fcitx_setFcitxCandidatePagingMode(JNIEnv *env, jclass clazz, jint mode) {
+    RETURN_IF_NOT_RUNNING
+    Fcitx::Instance().setCandidatePagingMode(mode);
 }
 
 extern "C"

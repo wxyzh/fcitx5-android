@@ -1,18 +1,21 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.data.prefs
 
 import android.content.SharedPreferences
 import android.os.Build
+import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.InputFeedbacks.InputFeedbackMode
-import org.fcitx.fcitx5.android.input.candidates.HorizontalCandidateMode
 import org.fcitx.fcitx5.android.input.candidates.expanded.ExpandedCandidateStyle
+import org.fcitx.fcitx5.android.input.candidates.floating.FloatingCandidatesMode
+import org.fcitx.fcitx5.android.input.candidates.floating.FloatingCandidatesOrientation
+import org.fcitx.fcitx5.android.input.candidates.horizontal.HorizontalCandidateMode
 import org.fcitx.fcitx5.android.input.keyboard.LangSwitchBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SwipeSymbolDirection
@@ -34,7 +37,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {
-        val ignoreSystemCursor = switch(R.string.ignore_sys_cursor, "ignore_system_cursor", true)
+        val ignoreSystemCursor = switch(R.string.ignore_sys_cursor, "ignore_system_cursor", false)
         val hideKeyConfig = switch(R.string.hide_key_config, "hide_key_config", true)
         val disableAnimation = switch(R.string.disable_animation, "disable_animation", false)
         val vivoKeypressWorkaround = switch(
@@ -42,9 +45,12 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             "vivo_keypress_workaround",
             DeviceUtil.isVivoOriginOS
         )
+        val ignoreSystemWindowInsets = switch(
+            R.string.ignore_system_window_insets, "ignore_system_window_insets", false
+        )
     }
 
-    inner class Keyboard : ManagedPreferenceCategory(R.string.keyboard, sharedPreferences) {
+    inner class Keyboard : ManagedPreferenceCategory(R.string.virtual_keyboard, sharedPreferences) {
         val hapticOnKeyPress =
             enumList(
                 R.string.button_haptic_feedback,
@@ -256,6 +262,57 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
 
     }
 
+    inner class Candidates :
+        ManagedPreferenceCategory(R.string.candidates_window, sharedPreferences) {
+        val mode = enumList(
+            R.string.show_candidates_window,
+            "show_candidates_window",
+            FloatingCandidatesMode.InputDevice
+        )
+
+        val orientation = enumList(
+            R.string.candidates_orientation,
+            "candidates_window_orientation",
+            FloatingCandidatesOrientation.Automatic
+        )
+
+        val windowMinWidth = int(
+            R.string.candidates_window_min_width,
+            "candidates_window_min_width",
+            0,
+            0,
+            640,
+            "dp",
+            10
+        )
+
+        val windowPadding =
+            int(R.string.candidates_window_padding, "candidates_window_padding", 4, 0, 32, "dp")
+
+        val fontSize =
+            int(R.string.candidates_font_size, "candidates_window_font_size", 20, 4, 64, "sp")
+
+        val itemPaddingVertical: ManagedPreference.PInt
+        val itemPaddingHorizontal: ManagedPreference.PInt
+
+        init {
+            val (primary, secondary) = twinInt(
+                R.string.candidates_padding,
+                R.string.vertical,
+                "candidates_item_padding_vertical",
+                2,
+                R.string.horizontal,
+                "candidates_item_padding_horizontal",
+                4,
+                0,
+                64,
+                "dp"
+            )
+            itemPaddingVertical = primary
+            itemPaddingHorizontal = secondary
+        }
+    }
+
     inner class Clipboard : ManagedPreferenceCategory(R.string.clipboard, sharedPreferences) {
         val clipboardListening = switch(R.string.clipboard_listening, "clipboard_enable", true)
         val clipboardHistoryLimit = int(
@@ -298,13 +355,16 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
 
     val internal = Internal().register()
     val keyboard = Keyboard().register()
+    val candidates = Candidates().register()
     val clipboard = Clipboard().register()
     val advanced = Advanced().register()
 
+    @Keep
     private val onSharedPreferenceChangeListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null) return@OnSharedPreferenceChangeListener
             providers.forEach {
-                it.managedPreferences[key]?.fireChange()
+                it.fireChange(key)
             }
         }
 
@@ -322,11 +382,14 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             ).forEach {
                 it.putValueTo(this@edit)
             }
-            keyboard.managedPreferences.forEach {
-                it.value.putValueTo(this@edit)
-            }
-            clipboard.managedPreferences.forEach {
-                it.value.putValueTo(this@edit)
+            listOf(
+                keyboard,
+                candidates,
+                clipboard
+            ).forEach { category ->
+                category.managedPreferences.forEach {
+                    it.value.putValueTo(this@edit)
+                }
             }
         }
     }
